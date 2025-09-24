@@ -1,8 +1,10 @@
 import React, { useState, useEffect } from 'react'
+import { getApiUrl, getLegacyBaseUrl } from '@/config/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DirectDepositFormEnhanced from '@/components/DirectDepositFormEnhanced'
 import ReviewAndSign from '@/components/ReviewAndSign'
+import PDFViewer from '@/components/PDFViewer'
 import { CheckCircle, DollarSign, AlertTriangle } from 'lucide-react'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
@@ -13,6 +15,7 @@ import { directDepositValidator } from '@/utils/stepValidators'
 import { ValidationSummary } from '@/components/ui/validation-summary'
 import { FormSection } from '@/components/ui/form-section'
 import axios from 'axios'
+import { secureStorage } from '@/services/SecureStorageService'
 
 export default function DirectDepositStep({
   currentStep,
@@ -21,13 +24,74 @@ export default function DirectDepositStep({
   saveProgress,
   language = 'en',
   employee,
-  property
+  property,
+  isSingleStepMode = false,
+  singleStepMeta
 }: StepProps) {
-  
+
   const [formData, setFormData] = useState<any>({})
   const [isValid, setIsValid] = useState(false)
   const [isSigned, setIsSigned] = useState(false)
   const [showReview, setShowReview] = useState(false)
+  const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [ssnFromI9, setSsnFromI9] = useState<string>('')
+
+  // Try to retrieve SSN from PersonalInfoStep or I9 form data stored in session
+  React.useEffect(() => {
+    console.log('DirectDepositStep - Starting SSN retrieval...')
+    (async () => {
+      try {
+        // First try PersonalInfoStep data (where SSN is initially entered)
+        const personalData = await secureStorage.secureRetrieve<any>('onboarding_personal-info_data')
+        console.log('DirectDepositStep - Personal info data exists:', !!personalData)
+        if (personalData) {
+          const ssn = personalData?.personalInfo?.ssn || personalData?.ssn || ''
+          console.log('DirectDepositStep - Personal info parsed SSN:', ssn ? ssn.replace(/./g, '*').slice(-4) : 'NOT FOUND')
+          if (ssn) {
+            console.log('DirectDepositStep - Retrieved SSN from PersonalInfo data')
+            setSsnFromI9(ssn)
+            return
+          }
+        }
+
+        // Fallback to I9 form data if not in PersonalInfo
+        const i9Data = await secureStorage.secureRetrieve<any>('onboarding_i9-form_data')
+        console.log('DirectDepositStep - I9 form data exists:', !!i9Data)
+        if (i9Data) {
+          const ssn = i9Data?.personalInfo?.ssn || i9Data?.ssn || ''
+          console.log('DirectDepositStep - I9 form parsed SSN:', ssn ? ssn.replace(/./g, '*').slice(-4) : 'NOT FOUND')
+          if (ssn) {
+            console.log('DirectDepositStep - Retrieved SSN from I9 form data')
+            setSsnFromI9(ssn)
+          }
+        }
+
+        // Additional fallback: check I9 complete step data
+        const i9CompleteData = await secureStorage.secureRetrieve<any>('onboarding_i9-complete_data')
+        console.log('DirectDepositStep - I9 complete data exists:', !!i9CompleteData)
+        if (i9CompleteData) {
+          const ssn = i9CompleteData?.formData?.ssn || i9CompleteData?.ssn || ''
+          console.log('DirectDepositStep - I9 complete parsed SSN:', ssn ? ssn.replace(/./g, '*').slice(-4) : 'NOT FOUND')
+          if (ssn) {
+            console.log('DirectDepositStep - Retrieved SSN from I9 Complete data')
+            setSsnFromI9(ssn)
+          }
+        }
+
+        console.log('DirectDepositStep - SSN retrieval complete. Final SSN:', ssnFromI9 ? ssnFromI9.replace(/./g, '*').slice(-4) : 'NOT FOUND')
+      } catch (e) {
+        console.error('Failed to retrieve SSN from session data:', e)
+      }
+    })()
+  }, [])
+
+  // Stable extra data for PDF generation
+  const extraPdfData = React.useMemo(() => ({
+    firstName: employee?.firstName || (employee as any)?.first_name,
+    lastName: employee?.lastName || (employee as any)?.last_name,
+    email: (employee as any)?.email,
+    ssn: ssnFromI9 || (formData as any)?.ssn || ''
+  }), [employee?.firstName, (employee as any)?.first_name, employee?.lastName, (employee as any)?.last_name, (employee as any)?.email, ssnFromI9, (formData as any)?.ssn])
 
   // Validation hook
   const { errors, fieldErrors, validate } = useStepValidation(directDepositValidator)
@@ -35,12 +99,12 @@ export default function DirectDepositStep({
   // Convert errors to ValidationSummary format
   const validationMessages = React.useMemo(() => {
     const messages = []
-    
+
     // Add general errors
     if (errors && errors.length > 0) {
       messages.push(...errors.map(error => ({ message: error, type: 'error' as const })))
     }
-    
+
     // Add field-specific errors
     if (fieldErrors) {
       Object.entries(fieldErrors).forEach(([field, message]) => {
@@ -49,7 +113,7 @@ export default function DirectDepositStep({
         }
       })
     }
-    
+
     return messages
   }, [errors, fieldErrors])
 
@@ -64,21 +128,25 @@ export default function DirectDepositStep({
   // Auto-save hook
   const { saveStatus } = useAutoSave(autoSaveData, {
     onSave: async (data) => {
-    await saveProgress(currentStep.id, data)
+      await saveProgress(currentStep.id, {
+        ...data,
+        isSingleStepMode
+      })
     }
   })
 
   // Load existing data
   useEffect(() => {
     console.log('DirectDepositStep - Loading data for step:', currentStep.id)
-    
-    // Try to load saved data from session storage
-    const savedData = sessionStorage.getItem(`onboarding_${currentStep.id}_data`)
+
+    // Try to load saved data from secure session storage
+    ;(async () => {
+      const savedData = await secureStorage.secureRetrieve<any>(`onboarding_${currentStep.id}_data`)
     if (savedData) {
       try {
-        const parsed = JSON.parse(savedData)
+        const parsed = savedData
         console.log('DirectDepositStep - Found saved data:', parsed)
-        
+
         // Check for different data structures
         if (parsed.formData) {
           console.log('DirectDepositStep - Setting formData from parsed.formData')
@@ -88,22 +156,38 @@ export default function DirectDepositStep({
           console.log('DirectDepositStep - Setting formData from direct structure')
           setFormData(parsed)
         }
-        
-        if (parsed.isSigned || parsed.signed) {
-          console.log('DirectDepositStep - Form was previously signed')
+
+        // Only set as signed if BOTH signed flag AND final PDF exist
+        if ((parsed.isSigned || parsed.signed) && parsed.pdfUrl) {
+          console.log('DirectDepositStep - Form was previously signed with PDF')
           setIsSigned(true)
           setIsValid(true)
+          setPdfUrl(parsed.pdfUrl)
+        } else if (parsed.showReview) {
+          // Restore review state if it was saved but not signed
+          console.log('DirectDepositStep - Restoring review state')
+          setShowReview(true)
+          setIsValid(parsed.isValid || false)
         }
       } catch (e) {
         console.error('Failed to parse saved direct deposit data:', e)
       }
     }
-    
+
+    // Only set as signed if step is complete AND we have a saved PDF
     if (progress.completedSteps.includes(currentStep.id)) {
       console.log('DirectDepositStep - Step marked as complete in progress')
-      setIsSigned(true)
-      setIsValid(true)
+      // Check if we have a signed PDF before marking as signed
+      const savedData2 = await secureStorage.secureRetrieve<any>(`onboarding_${currentStep.id}_data`)
+      if (savedData2) {
+        const parsed = savedData2
+        if (parsed.pdfUrl && (parsed.isSigned || parsed.signed)) {
+          setIsSigned(true)
+          setIsValid(true)
+        }
+      }
     }
+    })()
   }, [currentStep.id, progress.completedSteps])
 
   const handleFormComplete = async (data: any) => {
@@ -117,34 +201,101 @@ export default function DirectDepositStep({
       confirmAccountNumber: data.primaryAccount?.accountNumberConfirm,
       voidedCheckUploaded: data.voidedCheckUploaded,
       bankLetterUploaded: data.bankLetterUploaded,
-      accountVerified: data.accountVerified || data.voidedCheckUploaded || data.bankLetterUploaded
+      accountVerified: data.accountVerified || data.voidedCheckUploaded || data.bankLetterUploaded,
+      // Include deposit type and amount for partial deposits
+      depositType: data.depositType,
+      depositAmount:
+        data.depositType === 'partial' ? (data.primaryAccount?.depositAmount ?? '') : ''
     }
-    
+
     // Validate the transformed data
     const validation = await validate(validationData)
-    
+
     if (validation.valid) {
       setFormData(data)
       setIsValid(true)
       setShowReview(true)
-      
-      // Save to session storage
-      sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify({
+
+      // Save to secure session storage (no pdfUrl until signed)
+      await secureStorage.secureStore(`onboarding_${currentStep.id}_data`, {
         formData: data,
         isValid: true,
         isSigned: false,
-        showReview: true
-      }))
+        showReview: true,
+        // Don't save pdfUrl here - only after signing
+      });
     }
   }
 
-  const handleBackFromReview = () => {
+  const handleBackFromReview = async () => {
     setShowReview(false)
+    setPdfUrl(null)  // Clear any preview PDF
+
+    // Update secure session storage to clear review state
+    await secureStorage.secureStore(`onboarding_${currentStep.id}_data`, {
+      formData,
+      isValid: true,
+      isSigned: false,
+      showReview: false,
+      // No pdfUrl
+    })
   }
 
-  const handleDigitalSignature = async (signatureData: any) => {
+  const handleDigitalSignature = async (signatureData: any, generatedPdfUrl?: string) => {
+    console.log('DirectDepositStep - Signing with signature data')
+
+    // If we have an employee ID, regenerate PDF with signature
+    let finalPdfUrl = generatedPdfUrl || pdfUrl
+
+    if (employee?.id && signatureData) {
+      try {
+        console.log('DirectDepositStep - Regenerating PDF with signature...')
+        const apiUrl = getApiUrl()
+
+        // Create payload with signature included - ensure SSN is properly included
+        const pdfPayload = {
+          ...formData,
+          ...extraPdfData,
+          signatureData: signatureData,
+          // Ensure SSN is always included - try multiple sources
+          ssn: ssnFromI9 || extraPdfData?.ssn || (formData as any)?.ssn || ''
+        }
+
+        if (isSingleStepMode) {
+          pdfPayload.is_single_step = true
+          pdfPayload.single_step_mode = true
+          if (singleStepMeta?.sessionId) {
+            pdfPayload.session_id = singleStepMeta.sessionId
+          }
+        }
+
+        // Debug logging to identify SSN sources
+        console.log('DirectDepositStep - SSN Debug:')
+        console.log('  - ssnFromI9:', ssnFromI9)
+        console.log('  - extraPdfData.ssn:', extraPdfData?.ssn)
+        console.log('  - formData.ssn:', (formData as any)?.ssn)
+        console.log('  - Final SSN in payload:', pdfPayload.ssn)
+
+        // Regenerate PDF with signature
+        const response = await axios.post(
+          `${apiUrl}/onboarding/${employee.id}/direct-deposit/generate-pdf`,
+          { employee_data: pdfPayload },
+          { headers: { 'Content-Type': 'application/json' } }
+        )
+
+        if (response.data?.data?.pdf) {
+          finalPdfUrl = response.data.data.pdf
+          console.log('DirectDepositStep - PDF regenerated with signature')
+        }
+      } catch (error) {
+        console.error('Failed to regenerate PDF with signature:', error)
+        // Use preview PDF if regeneration fails
+      }
+    }
+
     setIsSigned(true)
-    
+    setPdfUrl(finalPdfUrl)
+
     // Create complete data with both nested and flat structure for compatibility
     const completeData = {
       // Include flattened primary account data for validator
@@ -156,23 +307,35 @@ export default function DirectDepositStep({
       signed: true,
       isSigned: true, // Include both for compatibility
       signatureData,
+      pdfUrl: finalPdfUrl,
       completedAt: new Date().toISOString()
     }
-    
+
+    if (isSingleStepMode) {
+      completeData.is_single_step = true
+      completeData.single_step_mode = true
+      if (singleStepMeta?.sessionId) {
+        completeData.session_id = singleStepMeta.sessionId
+      }
+      if (singleStepMeta?.recipientEmail) {
+        completeData.recipient_email = singleStepMeta.recipientEmail
+      }
+    }
+
     // Save to backend if we have an employee ID
     if (employee?.id) {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || '/api'
-        await axios.post(`${apiUrl}/api/onboarding/${employee.id}/direct-deposit`, completeData)
+        const apiUrl = getApiUrl()
+        await axios.post(`${apiUrl}/onboarding/${employee.id}/direct-deposit`, completeData)
         console.log('Direct deposit data saved to backend')
       } catch (error) {
         console.error('Failed to save direct deposit data to backend:', error)
         // Continue even if backend save fails - data is in session storage
       }
     }
-    
-    // Save to session storage with signed status and flat structure
-    sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify({
+
+    // Save to secure session storage with signed status and flat structure
+    await secureStorage.secureStore(`onboarding_${currentStep.id}_data`, {
       ...(formData.primaryAccount || {}), // Include flattened data
       ...formData,
       formData,
@@ -181,12 +344,13 @@ export default function DirectDepositStep({
       showReview: false,
       signed: true,
       signatureData,
+      pdfUrl: generatedPdfUrl || pdfUrl,
       completedAt: completeData.completedAt
-    }))
-    
+    })
+
     // Save progress to update controller's step data
     await saveProgress(currentStep.id, completeData)
-    
+
     await markStepComplete(currentStep.id, completeData)
     setShowReview(false)
   }
@@ -238,8 +402,48 @@ export default function DirectDepositStep({
 
   const t = translations[language]
 
+  // Show signed PDF if form is already signed
+  if (isSigned && pdfUrl) {
+    return (
+      <StepContainer errors={errors} saveStatus={saveStatus}>
+        <StepContentWrapper>
+          <div className="space-y-6">
+            {/* Completion Status */}
+            <Alert className="bg-green-50 border-green-200">
+              <CheckCircle className="h-4 w-4 text-green-600" />
+              <AlertDescription className="text-green-800">
+                {t.completionMessage}
+              </AlertDescription>
+            </Alert>
+
+            {/* Signed PDF Display */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <DollarSign className="h-5 w-5 text-green-600" />
+                  <span>Signed Direct Deposit Authorization</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <p className="text-sm text-gray-600">
+                    Your direct deposit authorization has been completed and signed.
+                  </p>
+                  <div className="border rounded-lg p-4">
+                    <PDFViewer pdfData={pdfUrl} height="600px" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </StepContentWrapper>
+      </StepContainer>
+    )
+  }
+
   // Show review and sign if form is valid and review is requested
   if (showReview && formData) {
+    const previewEmployeeId = employee?.id
     return (
       <StepContainer errors={errors} saveStatus={saveStatus}>
         <StepContentWrapper>
@@ -253,6 +457,14 @@ export default function DirectDepositStep({
             />
           )}
 
+          {isSingleStepMode && (
+            <Alert className="mb-6 bg-blue-50 border-blue-200">
+              <AlertDescription className="text-blue-800">
+                You are completing a standalone direct deposit form. Once you sign and submit, HR will be notified automatically{singleStepMeta?.recipientEmail ? ` at ${singleStepMeta.recipientEmail}` : ''}.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <FormSection
             title={t.reviewTitle}
             description="Please review your direct deposit information and sign to complete this step"
@@ -261,23 +473,16 @@ export default function DirectDepositStep({
           >
             <ReviewAndSign
               formType="direct_deposit"
-              formTitle="Direct Deposit Authorization Form"
+              title="Direct Deposit Authorization Form"
               formData={formData}
-              documentName="Direct Deposit Authorization"
-              signerName={employee?.firstName + ' ' + employee?.lastName || 'Employee'}
-              signerTitle={employee?.position}
-              onSign={handleDigitalSignature}
-              onEdit={handleBackFromReview}
-              acknowledgments={[
-                formData.paymentMethod === 'direct_deposit' 
-                  ? t.acknowledgments.directDeposit
-                  : t.acknowledgments.paperCheck,
-                t.acknowledgments.understand,
-                t.acknowledgments.update
-              ]}
+              description={employee?.position ? `Position: ${employee.position}` : undefined}
+              onSign={(signatureData: any) => handleDigitalSignature(signatureData, pdfUrl || undefined)}
+              onBack={handleBackFromReview}
               language={language}
-              usePDFPreview={true}
-              pdfEndpoint={`${import.meta.env.VITE_API_URL || '/api'}/api/onboarding/${employee?.id || 'test-employee'}/direct-deposit/generate-pdf`}
+              usePDFPreview={!!previewEmployeeId}
+              pdfEndpoint={previewEmployeeId ? `${getApiUrl()}/onboarding/${previewEmployeeId}/direct-deposit/generate-pdf` : undefined}
+              onPdfGenerated={(pdf: string) => setPdfUrl(pdf)}
+              extraPdfData={extraPdfData}
             />
           </FormSection>
           </div>
@@ -297,6 +502,14 @@ export default function DirectDepositStep({
             title="Please correct the following issues"
             className="mb-6"
           />
+        )}
+
+        {isSingleStepMode && (
+          <Alert className="bg-blue-50 border-blue-200">
+            <AlertDescription className="text-blue-800">
+              Complete this form to finalize your direct deposit details. A confirmation is sent to HR automatically once you finish.
+            </AlertDescription>
+          </Alert>
         )}
 
         {/* Progress Indicator */}
@@ -342,7 +555,7 @@ export default function DirectDepositStep({
                 initialData={formData}
                 language={language}
                 onSave={handleFormComplete}
-                onValidationChange={(valid: boolean, errors: Record<string, string>) => {
+                onValidationChange={(valid: boolean) => {
                   setIsValid(valid)
                 }}
                 employee={employee}

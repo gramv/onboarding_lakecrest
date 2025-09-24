@@ -6,6 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 Hotel Employee Onboarding System - A comprehensive digital platform for hotel employee onboarding with federal compliance (I-9, W-4) and multi-language support (English/Spanish).
 
+**Development Stats**: Built by a single developer in under 2 months for $5K - demonstrating exceptional efficiency and technical skill in delivering enterprise-grade software with federal compliance requirements.
+
 ## Development Commands
 
 ### Frontend (React + TypeScript)

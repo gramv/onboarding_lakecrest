@@ -7,6 +7,7 @@ import { OnboardingStep, OnboardingSession, OnboardingProgress } from '../types/
 import { AutoSaveManager } from '../utils/AutoSaveManager'
 import { stepValidators } from '../utils/stepValidators'
 import { ValidationResult } from '../hooks/useStepValidation'
+import { getApiUrl } from '../config/api'
 
 export interface Employee {
   id: string
@@ -17,6 +18,13 @@ export interface Employee {
   department: string
   startDate: string
   propertyId: string
+  // Approval details
+  payRate?: number
+  payFrequency?: string
+  startTime?: string
+  benefitsEligible?: string
+  supervisor?: string
+  specialInstructions?: string
 }
 
 export interface Property {
@@ -65,6 +73,10 @@ export interface StepProps {
   // Session
   sessionToken: string
   expiresAt: Date
+
+  // Single-step invitations
+  isSingleStepMode?: boolean
+  singleStepMeta?: Record<string, any> | null
 }
 
 export class OnboardingFlowController {
@@ -76,7 +88,7 @@ export class OnboardingFlowController {
   
   // Define the onboarding steps - aligned with the spec
   // Note: Emergency contacts are handled as a tab within personal-info step
-  public readonly steps: OnboardingStep[] = [
+  private readonly baseSteps: OnboardingStep[] = [
     { id: 'welcome', name: 'Welcome', order: 1, required: true, estimatedMinutes: 2, governmentRequired: false },
     { id: 'personal-info', name: 'Personal Information', order: 2, required: true, estimatedMinutes: 8, governmentRequired: false },
     { id: 'job-details', name: 'Job Details Confirmation', order: 3, required: true, estimatedMinutes: 3, governmentRequired: false },
@@ -90,11 +102,58 @@ export class OnboardingFlowController {
     { id: 'final-review', name: 'Final Review', order: 11, required: true, estimatedMinutes: 5, governmentRequired: false }
   ]
 
+  public steps: OnboardingStep[]
   private apiUrl: string
+  private isSingleStepMode = false
+  private singleStepTarget: string | null = null
+  private singleStepMetadata: Record<string, any> | null = null
   
   constructor() {
     this.autoSaveManager = new AutoSaveManager()
-    this.apiUrl = import.meta.env.VITE_API_URL || '/api'
+    // Use API URL with /api prefix for all endpoints
+    this.apiUrl = getApiUrl()
+    this.steps = [...this.baseSteps]
+  }
+
+  /**
+   * Enable single-step mode by restricting active steps to the target step
+   */
+  enableSingleStepMode(stepId: string, metadata?: Record<string, any>): void {
+    const targetStep = this.baseSteps.find(step => step.id === stepId)
+    if (!targetStep) {
+      console.warn(`Single-step target ${stepId} not found; falling back to full flow`)
+      this.disableSingleStepMode()
+      return
+    }
+
+    this.isSingleStepMode = true
+    this.singleStepTarget = stepId
+    this.singleStepMetadata = metadata || null
+    this.steps = [targetStep]
+    this.currentStepIndex = 0
+  }
+
+  /**
+   * Disable single-step mode and restore the full onboarding flow
+   */
+  disableSingleStepMode(): void {
+    this.isSingleStepMode = false
+    this.singleStepTarget = null
+    this.singleStepMetadata = null
+    this.steps = [...this.baseSteps]
+    this.currentStepIndex = 0
+  }
+
+  getIsSingleStepMode(): boolean {
+    return this.isSingleStepMode
+  }
+
+  getSingleStepTarget(): string | null {
+    return this.singleStepTarget
+  }
+
+  getSingleStepMetadata(): Record<string, any> | null {
+    return this.singleStepMetadata
   }
 
   /**
@@ -102,6 +161,9 @@ export class OnboardingFlowController {
    */
   async initializeOnboarding(token: string): Promise<OnboardingFlowSession> {
     try {
+      // Always reset to full flow when initializing a standard session
+      this.disableSingleStepMode()
+
       // Handle demo/test mode with fallback data
       if (token === 'demo-token') {
         const mockSession: OnboardingFlowSession = {
@@ -113,7 +175,14 @@ export class OnboardingFlowController {
             position: 'Front Desk Associate',
             department: 'Front Office',
             startDate: '2025-02-01',
-            propertyId: 'demo-property-001'
+            propertyId: 'demo-property-001',
+            // Add demo approval details
+            payRate: 18.50,
+            payFrequency: 'hourly',
+            startTime: '9:00 AM',
+            benefitsEligible: 'yes',
+            supervisor: 'Jane Manager',
+            specialInstructions: 'Please report to the front desk on your first day.'
           },
           property: {
             id: 'demo-property-001',
@@ -139,7 +208,7 @@ export class OnboardingFlowController {
 
       // Try to validate token and load session data from API
       try {
-        const response = await fetch(`${this.apiUrl}/api/onboarding/session/${token}`)
+        const response = await fetch(`${this.apiUrl}/onboarding/welcome/${token}`)
         
         if (!response.ok) {
           throw new Error(`API responded with status: ${response.status}`)
@@ -166,15 +235,99 @@ export class OnboardingFlowController {
         return this.session
         
       } catch (apiError) {
-        console.warn('API call failed, falling back to demo mode:', apiError)
-        // Fallback to demo mode if API fails
-        return this.initializeOnboarding('demo-token')
+        console.error('API call failed:', apiError)
+        // Don't fallback to demo mode - throw the error
+        throw apiError
       }
       
     } catch (error) {
       console.error('Failed to initialize onboarding session:', error)
       throw error
     }
+  }
+
+  /**
+   * Initialize the controller for single-step invitations
+   */
+  async initializeSingleStepSession(
+    token: string,
+    options: {
+      stepId: string
+      employee?: Partial<Employee> | null
+      property?: Partial<Property> | null
+      savedFormData?: Record<string, any>
+      sessionId?: string
+      recipientEmail?: string
+      recipientName?: string
+      expiresAt?: string | Date
+      metadata?: Record<string, any>
+    }
+  ): Promise<OnboardingFlowSession> {
+    const {
+      stepId,
+      employee,
+      property,
+      savedFormData,
+      sessionId,
+      recipientEmail,
+      recipientName,
+      expiresAt,
+      metadata
+    } = options
+
+    const employeeAny = employee as Record<string, any> | undefined
+
+    const fallbackEmployee: Employee = {
+      id: employee?.id || `temp-${stepId}-${Date.now()}`,
+      firstName: employee?.firstName || employeeAny?.first_name || 'Guest',
+      lastName: employee?.lastName || employeeAny?.last_name || 'User',
+      email: employee?.email || employeeAny?.email || 'onboarding@placeholder.local',
+      position: employee?.position || employeeAny?.position || 'Pending',
+      department: employee?.department || employeeAny?.department || 'Pending',
+      startDate: employee?.startDate || employeeAny?.start_date || new Date().toISOString().slice(0, 10),
+      propertyId: employee?.propertyId || employeeAny?.property_id || property?.id || 'temp-property',
+      payRate: employee?.payRate,
+      payFrequency: employee?.payFrequency,
+      startTime: employee?.startTime,
+      benefitsEligible: employee?.benefitsEligible,
+      supervisor: employee?.supervisor,
+      specialInstructions: employee?.specialInstructions
+    }
+
+    const propertyAny = property as Record<string, any> | undefined
+
+    const fallbackProperty: Property = {
+      id: property?.id || propertyAny?.id || fallbackEmployee.propertyId || 'temp-property',
+      name: property?.name || propertyAny?.name || 'Hotel Property',
+      address: property?.address || propertyAny?.address || ''
+    }
+
+    const progress: OnboardingProgress = {
+      currentStepIndex: 0,
+      totalSteps: 1,
+      completedSteps: [],
+      percentComplete: 0,
+      canProceed: true
+    }
+
+    this.session = {
+      employee: fallbackEmployee,
+      property: fallbackProperty,
+      progress,
+      sessionToken: token,
+      expiresAt: expiresAt ? new Date(expiresAt) : new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      savedFormData: savedFormData || {}
+    }
+
+    this.enableSingleStepMode(stepId, { sessionId, recipientEmail, recipientName, ...(metadata || {}) })
+
+    if (savedFormData) {
+      Object.entries(savedFormData).forEach(([step, data]) => {
+        this.setStepData(step, data)
+      })
+    }
+
+    return this.session
   }
 
   /**
@@ -207,45 +360,63 @@ export class OnboardingFlowController {
     }
 
     try {
-      // Handle demo mode
-      if (this.session.employee.id === 'demo-employee-001') {
-        // Update local progress in demo mode
-        if (!this.session.progress.completedSteps.includes(stepId)) {
-          this.session.progress.completedSteps.push(stepId)
-        }
+      // Save step data if provided
+      if (data) {
+        await this.saveProgress(stepId, data)
+      }
+
+      // Update completed steps in session
+      if (!this.session.progress.completedSteps.includes(stepId)) {
+        this.session.progress.completedSteps.push(stepId)
+      }
+
+      // Save completion status to sessionStorage (as backup)
+      const completionKey = `onboarding_${stepId}_completed`
+      sessionStorage.setItem(completionKey, 'true')
+
+      // Update overall progress in sessionStorage
+      const progressKey = 'onboarding_progress'
+      sessionStorage.setItem(progressKey, JSON.stringify(this.session.progress))
+
+      // Handle demo mode - skip API call
+      if (this.session.employee.id === 'demo-employee-001' || this.session.sessionToken === 'demo-token') {
         console.log(`Demo mode: Marked step ${stepId} as complete`)
         return
       }
 
-      const response = await fetch(`${this.apiUrl}/api/onboarding/${this.session.employee.id}/complete/${stepId}`, {
+      // Make API call to mark complete in cloud
+      const payload = {
+        formData: data || {},
+        stepId,
+        timestamp: new Date().toISOString(),
+        is_single_step: this.isSingleStepMode,
+        single_step_mode: this.isSingleStepMode,
+        session_id: this.singleStepMetadata?.sessionId,
+        target_step: this.singleStepTarget,
+        recipient_email: this.singleStepMetadata?.recipientEmail,
+        recipient_name: this.singleStepMetadata?.recipientName
+      }
+
+      const response = await fetch(`${this.apiUrl}/onboarding/${this.session.employee.id}/complete/${stepId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.session.sessionToken}`
         },
-        body: JSON.stringify(data || {})
+        body: JSON.stringify(payload)
       })
 
       if (!response.ok) {
-        throw new Error('Failed to mark step as complete')
+        throw new Error('Failed to mark step complete in cloud')
       }
 
-      // Update local progress
-      if (!this.session.progress.completedSteps.includes(stepId)) {
-        this.session.progress.completedSteps.push(stepId)
-      }
+      console.log(`Step marked as complete in cloud: ${stepId}`)
+      return
 
     } catch (error) {
-      console.error('Failed to mark step complete:', error)
-      // In demo mode or if API fails, just update locally
-      if (this.session.employee.id === 'demo-employee-001' || this.session.sessionToken === 'demo-token') {
-        if (!this.session.progress.completedSteps.includes(stepId)) {
-          this.session.progress.completedSteps.push(stepId)
-        }
-        console.warn('API failed, updated progress locally:', error)
-        return
-      }
-      throw error
+      console.error('Failed to mark step complete in cloud, saved locally:', error)
+      // Don't throw error - local save is sufficient
+      return
     }
   }
 
@@ -258,45 +429,56 @@ export class OnboardingFlowController {
     }
 
     try {
-      // Handle demo mode
+      // Save data to controller's internal storage
+      if (data) {
+        this.setStepData(stepId, data)
+      }
+
+      // Save to sessionStorage for persistence (as backup)
+      const storageKey = `onboarding_${stepId}_data`
+      if (data) {
+        sessionStorage.setItem(storageKey, JSON.stringify(data))
+      }
+
+      // Handle demo mode - skip API call
       if (this.session.employee.id === 'demo-employee-001' || this.session.sessionToken === 'demo-token') {
         console.log(`Demo mode: Saved progress for step ${stepId}`, data)
-        if (data) {
-          this.setStepData(stepId, data)
-        }
         return
       }
 
-      const response = await fetch(`${this.apiUrl}/api/onboarding/${this.session.employee.id}/progress/${stepId}`, {
+      // Make API call to save to cloud
+      const payload = {
+        formData: data || {},
+        stepId,
+        timestamp: new Date().toISOString(),
+        is_single_step: this.isSingleStepMode,
+        single_step_mode: this.isSingleStepMode,
+        session_id: this.singleStepMetadata?.sessionId,
+        target_step: this.singleStepTarget,
+        recipient_email: this.singleStepMetadata?.recipientEmail,
+        recipient_name: this.singleStepMetadata?.recipientName
+      }
+
+      const response = await fetch(`${this.apiUrl}/onboarding/${this.session.employee.id}/progress/${stepId}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.session.sessionToken}`
         },
-        body: JSON.stringify(data || {})
+        body: JSON.stringify(payload)
       })
 
       if (!response.ok) {
-        throw new Error('Failed to save progress')
+        throw new Error('Failed to save progress to cloud')
       }
 
-      // Update local session data if needed
-      // This would be extended to update form data cache
-      if (data) {
-        this.setStepData(stepId, data)
-      }
+      console.log(`Progress saved to cloud for step: ${stepId}`)
+      return
 
     } catch (error) {
-      console.error('Failed to save progress:', error)
-      // In demo mode, don't throw errors for save failures
-      if (this.session.employee.id === 'demo-employee-001' || this.session.sessionToken === 'demo-token') {
-        console.warn('API failed, but continuing in demo mode:', error)
-        if (data) {
-          this.setStepData(stepId, data)
-        }
-        return
-      }
-      throw error
+      console.error('Failed to save progress to cloud, saved locally:', error)
+      // Don't throw error - local save is sufficient
+      return
     }
   }
 
@@ -376,7 +558,9 @@ export class OnboardingFlowController {
       employee: this.session.employee,
       property: this.session.property,
       sessionToken: this.session.sessionToken,
-      expiresAt: this.session.expiresAt
+      expiresAt: this.session.expiresAt,
+      isSingleStepMode: this.isSingleStepMode,
+      singleStepMeta: this.singleStepMetadata
     }
   }
 

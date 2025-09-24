@@ -3,7 +3,7 @@
  * Implements the candidate onboarding flow specification
  */
 
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertCircle, RefreshCw } from 'lucide-react'
@@ -11,6 +11,7 @@ import { scrollToTop, scrollToErrorContainer } from '@/utils/scrollHelpers'
 import { ErrorBoundary } from '@/components/ErrorBoundary'
 import { SyncIndicator, SyncBadge } from '@/components/ui/sync-indicator'
 import { useSyncStatus } from '@/hooks/useSyncStatus'
+import { getApiUrl } from '@/config/api'
 
 // Import the new infrastructure
 import { OnboardingFlowController, StepProps } from '../controllers/OnboardingFlowController'
@@ -57,6 +58,11 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
   const [saveStatus, setSaveStatus] = useState<any>({ saving: false, lastSaved: null, error: null })
 
   const token = searchParams.get('token') || (testMode ? 'demo-token' : null)
+  const mode = searchParams.get('mode')
+  const requestedStep = searchParams.get('step')
+  const [isSingleStepMode, setIsSingleStepMode] = useState(mode === 'single')
+  const [singleStepTarget, setSingleStepTarget] = useState<string | null>(requestedStep)
+  const [singleStepMeta, setSingleStepMeta] = useState<Record<string, any> | null>(null)
   
   // Sync status hook
   const { syncStatus, lastSyncTime, syncError, startSync, syncSuccess, syncError: reportSyncError, syncOffline, isOnline } = useSyncStatus()
@@ -72,7 +78,9 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
 
       try {
         setLoading(true)
-        
+        const apiBase = getApiUrl()
+        const singleStepRequested = mode === 'single'
+
         // Clear old session data when using a new token
         const lastToken = sessionStorage.getItem('current_onboarding_token')
         if (lastToken && lastToken !== token) {
@@ -87,8 +95,70 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
           keysToRemove.forEach(key => sessionStorage.removeItem(key))
         }
         sessionStorage.setItem('current_onboarding_token', token)
-        
+
+        if (singleStepRequested) {
+          try {
+            const response = await fetch(`${apiBase}/onboarding/single-step/${token}`)
+            if (!response.ok) {
+              throw new Error(`Invitation lookup failed with status ${response.status}`)
+            }
+
+            const result = await response.json()
+            const data = result?.data || result
+
+            const targetStep = data?.sessionData?.stepId || requestedStep || data?._metadata?.target_step || 'direct-deposit'
+
+            const sessionData = await flowController.initializeSingleStepSession(token, {
+              stepId: targetStep,
+              employee: data?.employee || undefined,
+              property: data?.property || undefined,
+              savedFormData: data?.savedFormData || undefined,
+              sessionId: data?.sessionData?.sessionId,
+              recipientEmail: data?.sessionData?.recipientEmail,
+              recipientName: data?.sessionData?.recipientName,
+              expiresAt: data?.sessionData?.expiresAt,
+              metadata: data?._metadata
+            })
+
+            setIsSingleStepMode(true)
+            setSingleStepTarget(targetStep)
+            setSingleStepMeta({
+              ...(data?._metadata || {}),
+              employeeExists: data?.employeeExists,
+              sessionId: data?.sessionData?.sessionId,
+              recipientEmail: data?.sessionData?.recipientEmail,
+              recipientName: data?.sessionData?.recipientName
+            })
+
+            setSession(sessionData)
+            setCurrentStep(flowController.getCurrentStep())
+            setProgress(flowController.getProgress())
+
+            // Attempt to load any locally cached data for the target step
+            const savedData = sessionStorage.getItem(`onboarding_${targetStep}_data`)
+            if (savedData) {
+              try {
+                const parsed = JSON.parse(savedData)
+                flowController.setStepData(targetStep, parsed)
+              } catch (e) {
+                console.error(`Failed to parse saved data for single-step ${targetStep}:`, e)
+              }
+            }
+
+            setError(null)
+          } catch (singleStepError) {
+            console.error('Failed to initialize single-step session:', singleStepError)
+            setError(singleStepError instanceof Error ? singleStepError.message : 'Failed to load invitation')
+          } finally {
+            setLoading(false)
+          }
+          return
+        }
+
         const sessionData = await flowController.initializeOnboarding(token)
+        setIsSingleStepMode(false)
+        setSingleStepTarget(null)
+        setSingleStepMeta(null)
         setSession(sessionData)
         setCurrentStep(flowController.getCurrentStep())
         setProgress(flowController.getProgress())
@@ -133,7 +203,7 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
     }
 
     initializeSession()
-  }, [token, flowController])
+  }, [token, flowController, mode, requestedStep])
 
   // Auto-save management
   useEffect(() => {
@@ -257,7 +327,7 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
     setLanguage(newLanguage)
     // Save language preference
     if (currentStep) {
-      handleSaveProgress({ language_preference: newLanguage })
+      handleSaveProgress(currentStep.id, { language_preference: newLanguage })
     }
   }, [currentStep, handleSaveProgress])
 
@@ -288,9 +358,11 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
       employee: session.employee,
       property: session.property,
       sessionToken: session.sessionToken,
-      expiresAt: session.expiresAt
+      expiresAt: session.expiresAt,
+      isSingleStepMode,
+      singleStepMeta
     }
-  }, [session, currentStep, progress, language, handleStepComplete, handleSaveProgress, handleNextStep, handlePreviousStep])
+  }, [session, currentStep, progress, language, handleStepComplete, handleSaveProgress, handleNextStep, handlePreviousStep, isSingleStepMode, singleStepMeta])
 
   // Render step content
   const renderStepContent = () => {
@@ -392,11 +464,20 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
       <header className="bg-white border-b border-gray-200">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-semibold text-heading-primary text-gray-900">Employee Onboarding</h1>
-              <span className="ml-4 text-sm text-gray-500">
-                {session.property.name}
-              </span>
+            <div className="flex items-center space-x-3">
+              <h1 className="text-xl font-semibold text-heading-primary text-gray-900">
+                {isSingleStepMode ? 'Single-Step Form' : 'Employee Onboarding'}
+              </h1>
+              {session?.property?.name && !isSingleStepMode && (
+                <span className="ml-1 text-sm text-gray-500">
+                  {session.property.name}
+                </span>
+              )}
+              {isSingleStepMode && singleStepTarget && (
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                  {singleStepTarget.replace('-', ' ')}
+                </span>
+              )}
             </div>
             <div className="flex items-center space-x-4">
               {/* Sync Status Indicator - Full on desktop */}
@@ -431,7 +512,7 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
       </header>
 
       {/* Breadcrumb Navigation */}
-      {currentStep && (
+      {currentStep && !isSingleStepMode && (
         <div className="bg-white border-b border-gray-200">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3">
             <Breadcrumb 
@@ -443,7 +524,7 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
       )}
 
       {/* Progress Bar */}
-      {progress && (
+      {progress && !isSingleStepMode && (
         <ProgressBar
           steps={flowController.steps}
           currentStep={progress.currentStepIndex}
@@ -485,7 +566,7 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
               </ErrorBoundary>
 
               {/* Navigation */}
-              {progress && (
+              {progress && !isSingleStepMode && (
                 <NavigationButtons
                   showPrevious={progress.currentStepIndex > 0}
                   showNext={progress.currentStepIndex < progress.totalSteps - 1}

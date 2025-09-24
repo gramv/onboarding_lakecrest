@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { getApiUrl, getLegacyBaseUrl } from '@/config/api'
 import { Button } from '@/components/ui/button'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -9,6 +10,7 @@ import DigitalSignatureCapture from '@/components/DigitalSignatureCapture'
 import ReviewAndSign from '@/components/ReviewAndSign'
 import { CheckCircle, Building, FileText, ScrollText, PenTool, Check, Shield, Briefcase, Lock, Heart, ArrowRight, ArrowLeft } from 'lucide-react'
 import { StepProps } from '../../controllers/OnboardingFlowController'
+import PDFViewer from '@/components/PDFViewer'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
 import { useAutoSave } from '@/hooks/useAutoSave'
@@ -315,7 +317,9 @@ export default function CompanyPoliciesStep({
   saveProgress,
   language = 'en',
   employee,
-  property
+  property,
+  isSingleStepMode = false,
+  singleStepMeta
 }: StepProps) {
   
   // Section state - progressive flow
@@ -328,6 +332,7 @@ export default function CompanyPoliciesStep({
   const [acknowledgmentChecked, setAcknowledgmentChecked] = useState(false)
   const [isSigned, setIsSigned] = useState(false)
   const [signatureData, setSignatureData] = useState(null)
+  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null)
 
   // Section completion state
   const [section1Complete, setSection1Complete] = useState(false)
@@ -394,7 +399,10 @@ export default function CompanyPoliciesStep({
   // Auto-save hook
   const { saveStatus } = useAutoSave(formData, {
     onSave: async (data) => {
-      await saveProgress(currentStep.id, data)
+      await saveProgress(currentStep.id, {
+        ...data,
+        isSingleStepMode
+      })
     }
   })
 
@@ -503,6 +511,50 @@ export default function CompanyPoliciesStep({
         isSigned: true,
         completedAt: new Date().toISOString()
       }
+
+      if (isSingleStepMode) {
+        completeData.is_single_step = true
+        completeData.single_step_mode = true
+        if (singleStepMeta?.sessionId) {
+          completeData.session_id = singleStepMeta.sessionId
+        }
+        if (singleStepMeta?.recipientEmail) {
+          completeData.recipient_email = singleStepMeta.recipientEmail
+        }
+      }
+      
+      // Generate signed PDF
+      try {
+        const response = await fetch(`${getApiUrl()}/onboarding/${employee?.id || 'test-employee'}/company-policies/generate-pdf`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            employee_data: employee,
+            form_data: {
+              companyPoliciesInitials,
+              eeoInitials,
+              sexualHarassmentInitials,
+              acknowledgmentChecked,
+              ...completeData
+            },
+            signature_data: signature,
+            is_single_step: isSingleStepMode,
+            session_id: singleStepMeta?.sessionId
+          })
+        })
+        
+        if (response.ok) {
+          const data = await response.json()
+          if (data.data?.pdf) {
+            setSignedPdfUrl(data.data.pdf)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to generate signed PDF:', error)
+      }
+      
       // Save progress first to ensure data is stored
       await saveProgress(currentStep.id, completeData)
       // Then mark as complete
@@ -644,6 +696,14 @@ export default function CompanyPoliciesStep({
           </div>
           <p className="text-gray-600 max-w-3xl mx-auto">{t.description}</p>
         </div>
+
+        {isSingleStepMode && (
+          <Alert className="bg-blue-50 border-blue-200">
+            <AlertDescription className="text-blue-800">
+              This standalone review covers all company policies you need to acknowledge. Once you sign below, HR will receive an automatic confirmation{singleStepMeta?.recipientEmail ? ` at ${singleStepMeta.recipientEmail}` : ''}.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Progress indicator */}
         <div className="flex items-center justify-center space-x-4 mb-6">
@@ -1016,8 +1076,39 @@ export default function CompanyPoliciesStep({
                   ]}
                   language={language}
                   usePDFPreview={true}
-                  pdfEndpoint={`${import.meta.env.VITE_API_URL || '/api'}/api/onboarding/${employee?.id || 'test-employee'}/company-policies/generate-pdf`}
+                  pdfEndpoint={`${getApiUrl()}/onboarding/${employee?.id || 'test-employee'}/company-policies/generate-pdf`}
                 />
+              )}
+
+              {/* Show signed PDF preview */}
+              {isSigned && signedPdfUrl && (
+                <div className="space-y-6">
+                  <Alert className="bg-green-50 border-green-200">
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                    <AlertDescription className="text-green-800">
+                      <div className="space-y-2">
+                        <p className="font-medium">
+                          {language === 'es' 
+                            ? 'Las políticas de la empresa han sido firmadas y guardadas exitosamente.'
+                            : 'Company policies have been signed and saved successfully.'}
+                        </p>
+                        {signatureData && (
+                          <div className="text-sm space-y-1">
+                            {signatureData.signedAt && (
+                              <p>{language === 'es' ? 'Firmado el:' : 'Signed on:'} {new Date(signatureData.signedAt).toLocaleString()}</p>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                  
+                  <PDFViewer 
+                    pdfData={signedPdfUrl} 
+                    height="600px" 
+                    title="Signed Company Policies"
+                  />
+                </div>
               )}
 
               {/* Instructions for incomplete form */}
