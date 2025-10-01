@@ -17,7 +17,6 @@ import { FormSection } from '@/components/ui/form-section'
 import axios from 'axios'
 import { secureStorage } from '@/services/SecureStorageService'
 import { savePDFToStorage, getLatestPDFForStep } from '@/services/pdfStorage'
-import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 
 export default function DirectDepositStep({
   currentStep,
@@ -579,19 +578,6 @@ export default function DirectDepositStep({
                 </div>
               </CardContent>
             </Card>
-
-            {/* Navigation */}
-            <NavigationButtons
-              showPrevious={true}
-              showNext={true}
-              onPrevious={goToPreviousStep || (() => {})}
-              onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-              disabled={saveStatus?.saving}
-              saving={saveStatus?.saving}
-              hasErrors={false}
-              language={language}
-              nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
-            />
           </div>
         </StepContentWrapper>
       </StepContainer>
@@ -722,19 +708,6 @@ export default function DirectDepositStep({
             </div>
           </div>
         </FormSection>
-
-        {/* Navigation */}
-        <NavigationButtons
-          showPrevious={true}
-          showNext={true}
-          onPrevious={goToPreviousStep || (() => {})}
-          onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-          disabled={saveStatus?.saving || !isValid}
-          saving={saveStatus?.saving}
-          hasErrors={false}
-          language={language}
-          nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
-        />
         </div>
       </StepContentWrapper>
     </StepContainer>
