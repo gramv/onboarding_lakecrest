@@ -7,7 +7,6 @@ import { CheckCircle, GraduationCap, Shield, AlertTriangle, FileText } from 'luc
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
-import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { getApiUrl } from '@/config/api'
 import SimplePDFViewer from '@/components/SimplePDFViewer'
@@ -166,19 +165,6 @@ export default function TraffickingAwarenessStep({
             <div className="max-w-4xl mx-auto">
               <SimplePDFViewer pdfUrl={pdfUrl} />
             </div>
-
-            {/* Navigation */}
-            <NavigationButtons
-              showPrevious={true}
-              showNext={true}
-              onPrevious={goToPreviousStep || (() => {})}
-              onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-              disabled={false}
-              saving={false}
-              hasErrors={false}
-              language={language}
-              nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
-            />
           </div>
         </StepContentWrapper>
       </StepContainer>
@@ -249,20 +235,6 @@ export default function TraffickingAwarenessStep({
                 }}
               />
             </div>
-
-            {/* Navigation */}
-            <div className="max-w-4xl mx-auto">
-              <NavigationButtons
-                showPrevious={true}
-                showNext={false}
-                onPrevious={() => setShowReview(false)}
-                onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-                disabled={false}
-                saving={false}
-                hasErrors={false}
-                language={language}
-              />
-            </div>
           </div>
         </StepContentWrapper>
       </StepContainer>
@@ -311,19 +283,6 @@ export default function TraffickingAwarenessStep({
         <div className="text-center text-xs sm:text-sm text-gray-500">
           <p>{t.estimatedTime}</p>
         </div>
-
-        {/* Navigation */}
-        <NavigationButtons
-          showPrevious={true}
-          showNext={false}
-          onPrevious={goToPreviousStep || (() => {})}
-          onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-          disabled={saveStatus?.saving || !trainingComplete}
-          saving={saveStatus?.saving}
-          hasErrors={false}
-          language={language}
-        />
-
         </div>
       </StepContentWrapper>
     </StepContainer>
