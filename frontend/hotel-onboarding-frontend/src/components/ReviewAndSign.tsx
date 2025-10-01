@@ -459,12 +459,15 @@ export default function ReviewAndSign({
               </AlertDescription>
             </Alert>
           ) : (pdfUrl || pdfData) ? (
-            <PDFViewer
-              pdfData={(pdfUrl || pdfData) || undefined}
-              title={`${title} Preview`}
-              height="400px"
-              showToolbar={true}
-            />
+            <div className="h-64 sm:h-96 md:h-[400px]">
+              <PDFViewer
+                pdfUrl={pdfUrl || undefined}
+                pdfData={pdfData || undefined}
+                title={`${title} Preview`}
+                height="100%"
+                showToolbar={true}
+              />
+            </div>
           ) : null}
         </div>
       ) : (
