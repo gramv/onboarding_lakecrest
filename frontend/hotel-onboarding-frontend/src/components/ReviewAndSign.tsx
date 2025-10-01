@@ -459,7 +459,7 @@ export default function ReviewAndSign({
               </AlertDescription>
             </Alert>
           ) : (pdfUrl || pdfData) ? (
-            <div className="h-64 sm:h-96 md:h-[400px]">
+            <div className="h-[500px] sm:h-[600px] md:h-[700px] lg:h-[800px]">
               <PDFViewer
                 pdfUrl={pdfUrl || undefined}
                 pdfData={pdfData || undefined}

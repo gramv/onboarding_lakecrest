@@ -366,14 +366,21 @@ export default function DirectDepositStep({
   }
 
   const handleDigitalSignature = async (signatureData: any, generatedPdfUrl?: string) => {
-    console.log('DirectDepositStep - Signing with signature data')
+    console.log('🖊️ DirectDepositStep - Signing with signature data')
+    console.log('🖊️ Signature payload verification:', {
+      hasSignatureData: !!signatureData,
+      signatureDataType: typeof signatureData,
+      signatureKeys: signatureData ? Object.keys(signatureData) : [],
+      signatureStringLength: signatureData?.signature?.length || 0,
+      signaturePreview: signatureData?.signature?.substring(0, 50) || 'NO SIGNATURE'
+    })
 
     // If we have an employee ID, regenerate PDF with signature
     let finalPdfUrl = generatedPdfUrl || pdfUrl
 
     if (employee?.id && signatureData) {
       try {
-        console.log('DirectDepositStep - Regenerating PDF with signature...')
+        console.log('🖊️ DirectDepositStep - Regenerating PDF with signature...')
         const apiUrl = getApiUrl()
 
         // Create payload with signature included - ensure SSN is properly included
@@ -384,6 +391,11 @@ export default function DirectDepositStep({
           // Ensure SSN is always included - try multiple sources
           ssn: ssnFromI9 || extraPdfData?.ssn || (formData as any)?.ssn || ''
         }
+
+        console.log('🖊️ PDF Payload signature check:', {
+          payloadHasSignatureData: !!pdfPayload.signatureData,
+          signatureDataKeys: pdfPayload.signatureData ? Object.keys(pdfPayload.signatureData) : []
+        })
 
         if (isSingleStepMode) {
           pdfPayload.is_single_step = true
@@ -572,9 +584,7 @@ export default function DirectDepositStep({
                   <p className="text-xs sm:text-sm text-gray-600">
                     Your direct deposit authorization has been completed and signed.
                   </p>
-                  <div className="border rounded-lg p-2 sm:p-4">
-                    <PDFViewer pdfData={pdfUrl} height="600px" />
-                  </div>
+                  <PDFViewer pdfData={pdfUrl} height="600px" />
                 </div>
               </CardContent>
             </Card>
