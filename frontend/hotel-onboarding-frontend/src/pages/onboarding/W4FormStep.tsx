@@ -10,7 +10,6 @@ import { FormSection } from '@/components/ui/form-section'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
-import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useStepValidation } from '@/hooks/useStepValidation'
 import { w4FormValidator } from '@/utils/stepValidators'
@@ -861,19 +860,6 @@ export default function W4FormStep({
           />
         )}
         </div>
-
-        {/* Navigation */}
-        <NavigationButtons
-          showPrevious={true}
-          showNext={true}
-          onPrevious={goToPreviousStep || (() => {})}
-          onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-          disabled={saveStatus?.saving || !isSigned}
-          saving={saveStatus?.saving}
-          hasErrors={false}
-          language={language}
-          nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
-        />
       </StepContentWrapper>
     </StepContainer>
   )
