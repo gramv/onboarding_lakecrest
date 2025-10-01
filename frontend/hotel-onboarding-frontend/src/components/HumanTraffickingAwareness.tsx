@@ -1,19 +1,27 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { AlertTriangle, Phone, Shield, Users, CheckCircle, PlayCircle } from 'lucide-react';
 import YouTubeVideoPlayer from './YouTubeVideoPlayer';
 
 interface HumanTraffickingAwarenessProps {
   onTrainingComplete: (data: any) => void;
   language?: 'en' | 'es';
+  stepId?: string;
+  initialProgress?: {
+    currentSection?: number;
+    hasWatchedVideo?: boolean;
+    hasCompletedTraining?: boolean;
+  };
 }
 
 const HumanTraffickingAwareness: React.FC<HumanTraffickingAwarenessProps> = ({
   onTrainingComplete,
-  language = 'en'
+  language = 'en',
+  stepId = 'trafficking-awareness',
+  initialProgress
 }) => {
-  const [currentSection, setCurrentSection] = useState(0);
-  const [hasWatchedVideo, setHasWatchedVideo] = useState(false);
-  const [hasCompletedTraining, setHasCompletedTraining] = useState(false);
+  const [currentSection, setCurrentSection] = useState(initialProgress?.currentSection || 0);
+  const [hasWatchedVideo, setHasWatchedVideo] = useState(initialProgress?.hasWatchedVideo || false);
+  const [hasCompletedTraining, setHasCompletedTraining] = useState(initialProgress?.hasCompletedTraining || false);
 
   const content = {
     en: {
@@ -114,6 +122,17 @@ const HumanTraffickingAwareness: React.FC<HumanTraffickingAwarenessProps> = ({
 
   const currentContent = content[language];
   const sections = currentContent.sections;
+
+  // Save progress to session storage whenever state changes
+  useEffect(() => {
+    const progressData = {
+      currentSection,
+      hasWatchedVideo,
+      hasCompletedTraining
+    };
+
+    sessionStorage.setItem(`${stepId}_training_progress`, JSON.stringify(progressData));
+  }, [currentSection, hasWatchedVideo, hasCompletedTraining, stepId]);
 
   const handleVideoComplete = () => {
     setHasWatchedVideo(true);

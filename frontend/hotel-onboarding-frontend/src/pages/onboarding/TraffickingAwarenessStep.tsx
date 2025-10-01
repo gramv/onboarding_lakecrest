@@ -29,6 +29,7 @@ export default function TraffickingAwarenessStep({
   const [showReview, setShowReview] = useState(false)
   const [isSigned, setIsSigned] = useState(false)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [trainingProgress, setTrainingProgress] = useState<any>(null)
 
   // Auto-save data
   const autoSaveData = {
@@ -63,6 +64,17 @@ export default function TraffickingAwarenessStep({
         }
       } catch (e) {
         console.error('Failed to parse saved trafficking awareness data:', e)
+      }
+    }
+
+    // Load training progress (video/section state)
+    const savedProgress = sessionStorage.getItem(`${currentStep.id}_training_progress`)
+    if (savedProgress) {
+      try {
+        const parsed = JSON.parse(savedProgress)
+        setTrainingProgress(parsed)
+      } catch (e) {
+        console.error('Failed to parse training progress:', e)
       }
     }
 
@@ -275,6 +287,8 @@ export default function TraffickingAwarenessStep({
             <HumanTraffickingAwareness
               onTrainingComplete={handleTrainingComplete}
               language={language}
+              stepId={currentStep.id}
+              initialProgress={trainingProgress}
             />
           </CardContent>
         </Card>
