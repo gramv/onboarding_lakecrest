@@ -9,7 +9,6 @@ import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { FormSection } from '@/components/ui/form-section'
-import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 import { getApiUrl } from '@/config/api'
 
 interface WeaponsPolicyData {
@@ -321,19 +320,6 @@ export default function WeaponsPolicyStep({
                 </div>
               </CardContent>
             </Card>
-
-            {/* Navigation */}
-            <NavigationButtons
-              showPrevious={true}
-              showNext={true}
-              onPrevious={goToPreviousStep || (() => {})}
-              onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-              disabled={saveStatus?.saving}
-              saving={saveStatus?.saving}
-              hasErrors={false}
-              language={language}
-              nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
-            />
           </div>
         </StepContentWrapper>
       </StepContainer>
@@ -528,19 +514,6 @@ export default function WeaponsPolicyStep({
               </div>
             </div>
           </div>
-
-          {/* Navigation */}
-          <NavigationButtons
-            showPrevious={true}
-            showNext={true}
-            onPrevious={goToPreviousStep || (() => {})}
-            onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-            disabled={saveStatus?.saving || !isStepComplete}
-            saving={saveStatus?.saving}
-            hasErrors={false}
-            language={language}
-            nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
-          />
         </div>
       </StepContentWrapper>
     </StepContainer>
