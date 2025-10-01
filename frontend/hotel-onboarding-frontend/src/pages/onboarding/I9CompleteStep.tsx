@@ -1230,18 +1230,21 @@ export default function I9CompleteStep({
   return (
     <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus}>
       <StepContentWrapper>
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
         {/* Header */}
-        <div className="text-center mb-6">
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
-          <p className="text-gray-600 mt-2">{t.description}</p>
+        <div className="text-center px-4">
+          <div className="flex items-center justify-center space-x-2 mb-3 sm:mb-4">
+            <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t.title}</h1>
+          </div>
+          <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto leading-relaxed">{t.description}</p>
         </div>
-        
+
         {/* Completion Status */}
         {isSigned && (
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
+          <Alert className="bg-green-50 border-green-200 p-3 sm:p-4">
+            <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
+            <AlertDescription className="text-sm sm:text-base text-green-800">
               {t.completionMessage}
             </AlertDescription>
           </Alert>
@@ -1249,21 +1252,21 @@ export default function I9CompleteStep({
         
         {/* SSN Mismatch Warning */}
         {ssnMismatch.hasWarning && !ssnMismatch.acknowledged && activeTab === 'preview' && (
-          <Alert className="bg-amber-50 border-amber-200">
+          <Alert className="bg-amber-50 border-amber-200 p-3 sm:p-4">
             <AlertDescription className="text-amber-800">
-              <div className="space-y-3">
-                <div className="flex items-start space-x-2">
-                  <AlertTriangle className="h-5 w-5 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <strong>SSN Verification Required</strong>
-                    <p className="mt-1 text-sm">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="flex items-start space-x-2 sm:space-x-3">
+                  <AlertTriangle className="h-5 w-5 sm:h-6 sm:w-6 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <strong className="text-sm sm:text-base">SSN Verification Required</strong>
+                    <p className="mt-1 text-xs sm:text-sm">
                       The Social Security Number you entered in the form doesn't match the SSN on your uploaded Social Security card.
                       This could be a simple typo or a document issue.
                     </p>
                     <div className="mt-2 p-3 bg-white rounded border border-amber-200">
-                      <p className="text-sm font-medium mb-1">Comparison:</p>
-                      <p className="text-sm">Form Entry: ***-**-{formData.ssn?.slice(-4) || '****'}</p>
-                      <p className="text-sm">Document: ***-**-{(() => {
+                      <p className="text-xs sm:text-sm font-medium mb-1">Comparison:</p>
+                      <p className="text-xs sm:text-sm">Form Entry: ***-**-{formData.ssn?.slice(-4) || '****'}</p>
+                      <p className="text-xs sm:text-sm">Document: ***-**-{(() => {
                         const ssnDoc = documentsData?.extractedData?.find(doc => doc.documentType === 'social_security_card' || doc.type === 'social_security_card')
                         const ssn = ssnDoc?.ssn || ssnDoc?.data?.ssn
                         return ssn?.slice(-4) || '****'
@@ -1271,13 +1274,13 @@ export default function I9CompleteStep({
                     </div>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-3">
+                <div className="flex flex-col sm:flex-row sm:flex-wrap gap-2 sm:gap-3">
                   <button
                     onClick={() => {
                       setActiveTab('form')
                       scrollToTop()
                     }}
-                    className="px-4 py-2 bg-white border border-amber-600 text-amber-600 rounded hover:bg-amber-50 text-sm font-medium"
+                    className="w-full sm:w-auto px-4 py-2 bg-white border border-amber-600 text-amber-600 rounded hover:bg-amber-50 text-xs sm:text-sm font-medium min-h-[44px]"
                   >
                     ← Fix SSN Entry
                   </button>
@@ -1286,18 +1289,18 @@ export default function I9CompleteStep({
                       setActiveTab('documents')
                       scrollToTop()
                     }}
-                    className="px-4 py-2 bg-white border border-amber-600 text-amber-600 rounded hover:bg-amber-50 text-sm font-medium"
+                    className="w-full sm:w-auto px-4 py-2 bg-white border border-amber-600 text-amber-600 rounded hover:bg-amber-50 text-xs sm:text-sm font-medium min-h-[44px]"
                   >
                     ← Re-upload Document
                   </button>
                   <button
                     onClick={() => setSsnMismatch(prev => ({ ...prev, acknowledged: true }))}
-                    className="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-sm font-medium"
+                    className="w-full sm:w-auto px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 text-xs sm:text-sm font-medium min-h-[44px]"
                   >
                     Continue with Mismatch
                   </button>
                 </div>
-                <p className="text-xs text-amber-700 italic">
+                <p className="text-[10px] sm:text-xs text-amber-700 italic">
                   Note: Proceeding with mismatched SSNs may cause issues during employment verification.
                 </p>
               </div>
@@ -1307,17 +1310,17 @@ export default function I9CompleteStep({
         
         {/* Tabbed Interface */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-4 mb-6">
+          <TabsList className="grid w-full grid-cols-4 mb-4 sm:mb-6 sticky top-0 z-10 bg-white shadow-sm">
             {tabs.map(tab => (
-              <TabsTrigger 
+              <TabsTrigger
                 key={tab.id}
                 value={tab.id}
                 disabled={!tab.enabled}
-                className="flex items-center space-x-2"
+                className="flex flex-col sm:flex-row items-center justify-center sm:space-x-2 min-h-[44px] text-xs sm:text-sm px-1 sm:px-3"
               >
-                {tab.icon}
-                <span className="hidden sm:inline">{tab.label}</span>
-                {tab.complete && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
+                {React.cloneElement(tab.icon, { className: 'h-4 w-4 flex-shrink-0' })}
+                <span className="text-[10px] sm:text-sm mt-0.5 sm:mt-0 truncate">{tab.label}</span>
+                {tab.complete && <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 ml-0 sm:ml-1 flex-shrink-0 hidden sm:block" />}
               </TabsTrigger>
             ))}
           </TabsList>
