@@ -295,39 +295,39 @@ export default function DigitalSignatureCapture({
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="text-center">
+      <div className="text-center px-4">
         <div className="flex items-center justify-center mb-4">
           <div className="p-3 bg-blue-100 rounded-full">
-            <PenTool className="h-8 w-8 text-blue-600" />
+            <PenTool className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600" />
           </div>
         </div>
-        <h2 className="text-2xl font-bold text-gray-900">{t('digital_signature')}</h2>
-        <p className="text-gray-600 mt-2">{t('signature_required')}</p>
-        <Badge variant="outline" className="mt-2">
-          <Shield className="h-4 w-4 mr-1" />
+        <h2 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t('digital_signature')}</h2>
+        <p className="text-sm sm:text-base text-gray-600 mt-2">{t('signature_required')}</p>
+        <Badge variant="outline" className="mt-2 text-xs sm:text-sm">
+          <Shield className="h-3 w-3 sm:h-4 sm:w-4 mr-1" />
           {t('legal_binding')}
         </Badge>
       </div>
 
       {/* Document Info */}
       <Card className="bg-blue-50">
-        <CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <FileText className="h-5 w-5 text-blue-600" />
-              <div>
-                <p className="font-medium text-blue-900">Document: {documentName}</p>
-                <p className="text-sm text-blue-700">Signer: {signerName}</p>
-                {signerTitle && <p className="text-sm text-blue-700">Title: {signerTitle}</p>}
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
+            <div className="flex items-start sm:items-center space-x-3">
+              <FileText className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5 sm:mt-0" />
+              <div className="min-w-0 flex-1">
+                <p className="font-medium text-blue-900 text-sm sm:text-base truncate">Document: {documentName}</p>
+                <p className="text-xs sm:text-sm text-blue-700 truncate">Signer: {signerName}</p>
+                {signerTitle && <p className="text-xs sm:text-sm text-blue-700 truncate">Title: {signerTitle}</p>}
               </div>
             </div>
-            <div className="text-right text-sm text-blue-700">
+            <div className="text-left sm:text-right text-xs sm:text-sm text-blue-700 space-y-1">
               <div className="flex items-center">
-                <Clock className="h-4 w-4 mr-1" />
-                {new Date().toLocaleString()}
+                <Clock className="h-3 w-3 sm:h-4 sm:w-4 mr-1 flex-shrink-0" />
+                <span className="truncate">{new Date().toLocaleString()}</span>
               </div>
-              {ipAddress && <div>{t('ip_address').replace('{ip}', ipAddress)}</div>}
-              {browserInfo.platform && <div className="text-xs">Platform: {browserInfo.platform}</div>}
+              {ipAddress && <div className="truncate">{t('ip_address').replace('{ip}', ipAddress)}</div>}
+              {browserInfo.platform && <div className="text-xs truncate">Platform: {browserInfo.platform}</div>}
             </div>
           </div>
         </CardContent>
@@ -419,17 +419,18 @@ export default function DigitalSignatureCapture({
       {/* Signature Capture */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">{t('signature_verification')}</CardTitle>
+          <CardTitle className="text-base sm:text-lg">{t('signature_verification')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <p className="text-sm text-gray-600 mb-4">{t('draw_instruction')}</p>
-            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 bg-white">
+            <p className="text-xs sm:text-sm text-gray-600 mb-4">{t('draw_instruction')}</p>
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-2 sm:p-4 bg-white">
               <canvas
                 ref={canvasRef}
-                width={600}
-                height={200}
-                className="w-full h-32 border border-gray-200 rounded cursor-crosshair"
+                width={800}
+                height={300}
+                className="w-full h-40 sm:h-48 md:h-52 border border-gray-200 rounded cursor-crosshair touch-none"
+                style={{ touchAction: 'none' }}
                 onMouseDown={startDrawing}
                 onMouseMove={draw}
                 onMouseUp={stopDrawing}
@@ -438,20 +439,20 @@ export default function DigitalSignatureCapture({
                 onTouchMove={draw}
                 onTouchEnd={stopDrawing}
               />
-              <div className="flex justify-between items-center mt-3">
-                <p className="text-xs text-gray-500">Sign above</p>
-                <Button variant="outline" size="sm" onClick={clearSignature}>
+              <div className="flex justify-between items-center mt-2 sm:mt-3">
+                <p className="text-xs text-gray-500">{language === 'es' ? 'Firme arriba' : 'Sign above'}</p>
+                <Button variant="outline" size="sm" onClick={clearSignature} className="min-h-[44px]">
                   <RotateCcw className="h-4 w-4 mr-2" />
                   {t('clear')}
                 </Button>
               </div>
             </div>
-            
+
             {/* Electronic Signature Legal Notice */}
-            <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
-              <p className="text-xs text-blue-800 flex items-start">
-                <Info className="h-3 w-3 mr-1 mt-0.5 flex-shrink-0" />
-                {language === 'es' 
+            <div className="mt-3 p-2 sm:p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <p className="text-xs sm:text-sm text-blue-800 flex items-start leading-relaxed">
+                <Info className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 mt-0.5 flex-shrink-0" />
+                {language === 'es'
                   ? 'Las firmas electrónicas tienen el mismo nivel de autenticidad y validez legal que las firmas físicas según la Ley ESIGN y UETA.'
                   : 'Electronic signatures have the same level of authenticity and legal validity as physical signatures under the ESIGN Act and UETA.'}
               </p>
@@ -489,16 +490,16 @@ export default function DigitalSignatureCapture({
       )}
 
       {/* Action Buttons */}
-      <div className="flex justify-between items-center pt-6">
-        <Button variant="outline" onClick={onCancel}>
+      <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 sm:gap-0 pt-6">
+        <Button variant="outline" onClick={onCancel} className="w-full sm:w-auto min-h-[48px]">
           {t('cancel')}
         </Button>
-        
-        <Button 
+
+        <Button
           onClick={handleSubmitSignature}
           disabled={!canSign}
           size="lg"
-          className="px-8"
+          className="w-full sm:w-auto min-h-[48px] px-8"
         >
           <Check className="h-5 w-5 mr-2" />
           {t('sign_document')}
