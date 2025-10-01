@@ -288,33 +288,33 @@ export default function WeaponsPolicyStep({
     return (
       <StepContainer saveStatus={saveStatus}>
         <StepContentWrapper>
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
             <div className="text-center">
-              <div className="flex items-center justify-center space-x-2 mb-4">
-                <Shield className="h-6 w-6 text-blue-600" />
-                <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+              <div className="flex items-center justify-center space-x-2 mb-3 sm:mb-4">
+                <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t.title}</h1>
               </div>
-              <p className="text-gray-600 max-w-3xl mx-auto">{t.subtitle}</p>
+              <p className="text-sm sm:text-base text-gray-600 max-w-3xl mx-auto px-4">{t.subtitle}</p>
             </div>
 
-            <Alert className="bg-green-50 border-green-200">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
-                {language === 'es' 
+            <Alert className="bg-green-50 border-green-200 p-3 sm:p-4">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
+              <AlertDescription className="text-sm sm:text-base text-green-800">
+                {language === 'es'
                   ? 'Política de armas reconocida y firmada exitosamente.'
                   : 'Weapons policy acknowledged and signed successfully.'}
               </AlertDescription>
             </Alert>
 
             <Card>
-              <CardContent className="p-6">
+              <CardContent className="p-4 sm:p-6">
                 <div className="text-center">
-                  <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-                  <h3 className="text-xl font-semibold text-green-800 mb-2">
+                  <CheckCircle className="h-12 w-12 sm:h-16 sm:w-16 text-green-500 mx-auto mb-3 sm:mb-4" />
+                  <h3 className="text-lg sm:text-xl font-semibold text-green-800 mb-2">
                     {language === 'es' ? 'Reconocimiento Completo' : 'Acknowledgment Complete'}
                   </h3>
-                  <p className="text-gray-600">
-                    {language === 'es' 
+                  <p className="text-sm sm:text-base text-gray-600">
+                    {language === 'es'
                       ? 'Su reconocimiento ha sido registrado y guardado.'
                       : 'Your acknowledgment has been recorded and saved.'}
                   </p>
@@ -386,22 +386,22 @@ export default function WeaponsPolicyStep({
   return (
     <StepContainer saveStatus={saveStatus}>
       <StepContentWrapper>
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
           {/* Step Header */}
           <div className="text-center">
-            <div className="flex items-center justify-center space-x-2 mb-4">
-              <Shield className="h-6 w-6 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+            <div className="flex items-center justify-center space-x-2 mb-3 sm:mb-4">
+              <Shield className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t.title}</h1>
             </div>
-            <p className="text-gray-600 max-w-3xl mx-auto">{t.subtitle}</p>
+            <p className="text-sm sm:text-base text-gray-600 max-w-3xl mx-auto px-4">{t.subtitle}</p>
           </div>
 
           {/* Zero Tolerance Notice */}
-          <Alert className="bg-red-50 border-red-200">
-            <AlertTriangle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">
+          <Alert className="bg-red-50 border-red-200 p-3 sm:p-4">
+            <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 flex-shrink-0" />
+            <AlertDescription className="text-xs sm:text-sm text-red-800">
               <strong>{language === 'es' ? 'Cero Tolerancia:' : 'Zero Tolerance:'}</strong>{' '}
-              {language === 'es' 
+              {language === 'es'
                 ? 'Nuestra empresa mantiene una política estricta de no armas para todos los empleados, contratistas y visitantes.'
                 : 'Our company maintains a strict no-weapons policy for all employees, contractors, and visitors.'}
             </AlertDescription>
@@ -409,25 +409,25 @@ export default function WeaponsPolicyStep({
 
           {/* Policy Content */}
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center space-x-2">
-                <FileText className="h-5 w-5 text-blue-600" />
+            <CardHeader className="p-4 sm:p-6">
+              <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+                <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
                 <span>{t.policy.title}</span>
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-8">
+            <CardContent className="p-4 sm:p-6">
+              <div className="space-y-6 sm:space-y-8">
                 {t.policy.sections.map((section, index) => (
-                  <div key={index} className="border-l-4 border-blue-500 pl-6">
-                    <div className="flex items-center gap-3 mb-4">
-                      {section.icon}
-                      <h3 className="text-xl font-semibold text-gray-800">{section.title}</h3>
+                  <div key={index} className="border-l-4 border-blue-500 pl-4 sm:pl-6">
+                    <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+                      {React.cloneElement(section.icon, { className: 'h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0' })}
+                      <h3 className="text-lg sm:text-xl font-semibold text-gray-800">{section.title}</h3>
                     </div>
                     <ul className="space-y-2">
                       {section.content.map((item, itemIndex) => (
                         <li key={itemIndex} className="flex items-start gap-2">
                           <span className="w-2 h-2 bg-gray-400 rounded-full mt-2 flex-shrink-0"></span>
-                          <span className="text-gray-700">{item}</span>
+                          <span className="text-xs sm:text-sm text-gray-700">{item}</span>
                         </li>
                       ))}
                     </ul>
@@ -436,16 +436,16 @@ export default function WeaponsPolicyStep({
               </div>
 
               {/* Exceptions */}
-              <div className="mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <h4 className="font-semibold text-yellow-800 mb-3 flex items-center gap-2">
-                  <Info className="h-5 w-5" />
+              <div className="mt-6 sm:mt-8 bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4">
+                <h4 className="font-semibold text-yellow-800 mb-2 sm:mb-3 flex items-center gap-2 text-sm sm:text-base">
+                  <Info className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                   {language === 'es' ? 'Excepciones Limitadas' : 'Limited Exceptions'}
                 </h4>
                 <ul className="space-y-1">
                   {t.policy.exceptions.map((exception, index) => (
                     <li key={index} className="flex items-start gap-2 text-yellow-700">
                       <span className="w-2 h-2 bg-yellow-500 rounded-full mt-2 flex-shrink-0"></span>
-                      <span>{exception}</span>
+                      <span className="text-xs sm:text-sm">{exception}</span>
                     </li>
                   ))}
                 </ul>
