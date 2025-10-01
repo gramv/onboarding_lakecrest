@@ -152,14 +152,14 @@ export default function TraffickingAwarenessStep({
     return (
       <StepContainer saveStatus={saveStatus}>
         <StepContentWrapper>
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
             {/* Header */}
             <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg mb-4">
-                <CheckCircle className="h-8 w-8 text-white" />
+              <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-green-500 to-green-600 shadow-lg mb-3 sm:mb-4">
+                <CheckCircle className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
               </div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2">{t.viewCertificate}</h1>
-              <p className="text-gray-600">{t.completionMessage}</p>
+              <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900 mb-2">{t.viewCertificate}</h1>
+              <p className="text-sm sm:text-base text-gray-600">{t.completionMessage}</p>
             </div>
 
             {/* PDF Viewer */}
@@ -190,26 +190,26 @@ export default function TraffickingAwarenessStep({
     return (
       <StepContainer saveStatus={saveStatus}>
         <StepContentWrapper>
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8 px-2 sm:px-0">
             {/* Professional Header */}
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg mb-4">
-                <FileText className="h-10 w-10 text-white" />
+            <div className="text-center space-y-3 sm:space-y-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg mb-3 sm:mb-4">
+                <FileText className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">
                   {t.reviewTitle}
                 </h1>
-                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">
                   {t.reviewDescription}
                 </p>
               </div>
 
               {/* Professional divider */}
-              <div className="flex items-center justify-center space-x-4 py-4">
-                <div className="h-px w-24 bg-gradient-to-r from-transparent to-blue-300"></div>
-                <Shield className="h-5 w-5 text-blue-500" />
-                <div className="h-px w-24 bg-gradient-to-l from-transparent to-blue-300"></div>
+              <div className="flex items-center justify-center space-x-3 sm:space-x-4 py-3 sm:py-4">
+                <div className="h-px w-16 sm:w-24 bg-gradient-to-r from-transparent to-blue-300"></div>
+                <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 flex-shrink-0" />
+                <div className="h-px w-16 sm:w-24 bg-gradient-to-l from-transparent to-blue-300"></div>
               </div>
             </div>
 
@@ -273,33 +273,33 @@ export default function TraffickingAwarenessStep({
   return (
     <StepContainer saveStatus={saveStatus}>
       <StepContentWrapper>
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
         {/* Step Header */}
         <div className="text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <GraduationCap className="h-6 w-6 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+          <div className="flex items-center justify-center space-x-2 mb-3 sm:mb-4">
+            <GraduationCap className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t.title}</h1>
           </div>
-          <p className="text-gray-600 max-w-3xl mx-auto">{t.description}</p>
+          <p className="text-sm sm:text-base text-gray-600 max-w-3xl mx-auto leading-relaxed px-4">{t.description}</p>
         </div>
 
         {/* Federal Requirement Notice */}
-        <Alert className="bg-red-50 border-red-200">
-          <AlertTriangle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">
+        <Alert className="bg-red-50 border-red-200 p-3 sm:p-4">
+          <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-red-600 flex-shrink-0" />
+          <AlertDescription className="text-xs sm:text-sm text-red-800">
             <strong>{t.federalRequirement}</strong> {t.federalNotice}
           </AlertDescription>
         </Alert>
 
         {/* Training Module Card */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Shield className="h-5 w-5 text-blue-600" />
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+              <Shield className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
               <span>{t.trainingModule}</span>
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-4 sm:p-6">
             <HumanTraffickingAwareness
               onTrainingComplete={handleTrainingComplete}
               language={language}
@@ -308,7 +308,7 @@ export default function TraffickingAwarenessStep({
         </Card>
 
         {/* Time Estimate */}
-        <div className="text-center text-sm text-gray-500">
+        <div className="text-center text-xs sm:text-sm text-gray-500">
           <p>{t.estimatedTime}</p>
         </div>
 
