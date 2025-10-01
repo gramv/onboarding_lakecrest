@@ -192,37 +192,37 @@ export function AnalyticsTab({ userRole: propUserRole, propertyId: propPropertyI
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Header with Export */}
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3">
         <div>
-          <h2 className="text-2xl font-bold">Analytics Dashboard</h2>
-          <p className="text-gray-600">
-            {userRole === 'hr' 
+          <h2 className="text-xl sm:text-2xl font-bold">Analytics Dashboard</h2>
+          <p className="text-xs sm:text-sm text-gray-600">
+            {userRole === 'hr'
               ? 'System metrics and performance insights'
               : 'Property metrics and performance insights'}
           </p>
         </div>
-        <Button onClick={handleExportData} disabled={exporting}>
-          <Download className="h-4 w-4 mr-2" />
-          {exporting ? 'Exporting...' : 'Export Data'}
+        <Button onClick={handleExportData} disabled={exporting} className="min-h-[44px] w-full sm:w-auto">
+          <Download className="h-4 w-4 mr-2 flex-shrink-0" />
+          <span>{exporting ? 'Exporting...' : 'Export Data'}</span>
         </Button>
       </div>
 
       {/* System Overview Cards */}
       {analyticsOverview && (
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 md:gap-6">
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Applications</p>
-                  <p className="text-2xl font-bold">{analyticsOverview?.overview?.totalApplications || 0}</p>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Total Applications</p>
+                  <p className="text-xl sm:text-2xl font-bold">{analyticsOverview?.overview?.totalApplications || 0}</p>
                 </div>
-                <FileText className="h-8 w-8 text-blue-500" />
+                <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-blue-500 flex-shrink-0" />
               </div>
               <div className="mt-2">
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">
                   +{analyticsOverview?.recentActivity?.newApplications || 0} this month
                 </Badge>
               </div>
@@ -230,27 +230,27 @@ export function AnalyticsTab({ userRole: propUserRole, propertyId: propPropertyI
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600 truncate">
                     {userRole === 'hr' ? 'Active Properties' : 'Pending Applications'}
                   </p>
-                  <p className="text-2xl font-bold">
-                    {userRole === 'hr' 
+                  <p className="text-xl sm:text-2xl font-bold">
+                    {userRole === 'hr'
                       ? analyticsOverview?.overview?.totalProperties || 0
                       : analyticsOverview?.overview?.pendingApplications || 0}
                   </p>
                 </div>
                 {userRole === 'hr' ? (
-                  <Building className="h-8 w-8 text-green-500" />
+                  <Building className="h-6 w-6 sm:h-8 sm:w-8 text-green-500 flex-shrink-0" />
                 ) : (
-                  <FileText className="h-8 w-8 text-yellow-500" />
+                  <FileText className="h-6 w-6 sm:h-8 sm:w-8 text-yellow-500 flex-shrink-0" />
                 )}
               </div>
               <div className="mt-2">
-                <Badge variant="secondary" className="text-xs">
-                  {userRole === 'hr' 
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                  {userRole === 'hr'
                     ? `${analyticsOverview?.overview?.totalManagers || 0} managers`
                     : 'Awaiting review'}
                 </Badge>
@@ -259,16 +259,16 @@ export function AnalyticsTab({ userRole: propUserRole, propertyId: propPropertyI
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Total Employees</p>
-                  <p className="text-2xl font-bold">{analyticsOverview?.overview?.totalEmployees || 0}</p>
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Total Employees</p>
+                  <p className="text-xl sm:text-2xl font-bold">{analyticsOverview?.overview?.totalEmployees || 0}</p>
                 </div>
-                <Users className="h-8 w-8 text-purple-500" />
+                <Users className="h-6 w-6 sm:h-8 sm:w-8 text-purple-500 flex-shrink-0" />
               </div>
               <div className="mt-2">
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">
                   +{analyticsOverview?.recentActivity?.newEmployees || 0} this month
                 </Badge>
               </div>
@@ -276,20 +276,20 @@ export function AnalyticsTab({ userRole: propUserRole, propertyId: propPropertyI
           </Card>
 
           <Card>
-            <CardContent className="p-6">
+            <CardContent className="p-4 sm:p-6">
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600">Approval Rate</p>
-                  <p className="text-2xl font-bold">
-                    {analyticsOverview?.overview?.totalApplications > 0 
+                <div className="min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Approval Rate</p>
+                  <p className="text-xl sm:text-2xl font-bold">
+                    {analyticsOverview?.overview?.totalApplications > 0
                       ? Math.round((analyticsOverview?.overview?.approvedApplications / analyticsOverview?.overview?.totalApplications) * 100)
                       : 0}%
                   </p>
                 </div>
-                <TrendingUp className="h-8 w-8 text-orange-500" />
+                <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-orange-500 flex-shrink-0" />
               </div>
               <div className="mt-2">
-                <Badge variant="secondary" className="text-xs">
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">
                   {analyticsOverview?.overview?.approvedApplications || 0} approved
                 </Badge>
               </div>
@@ -299,22 +299,33 @@ export function AnalyticsTab({ userRole: propUserRole, propertyId: propPropertyI
       )}
 
       {/* Detailed Analytics Tabs */}
-      <Tabs defaultValue="applications" className="space-y-6">
-        <TabsList className={`grid w-full ${userRole === 'hr' ? 'grid-cols-3' : 'grid-cols-2'}`}>
-          <TabsTrigger value="applications">Application Trends</TabsTrigger>
-          {userRole === 'hr' && <TabsTrigger value="properties">Property Performance</TabsTrigger>}
-          <TabsTrigger value="employees">Employee Analytics</TabsTrigger>
+      <Tabs defaultValue="applications" className="space-y-4 sm:space-y-6">
+        <TabsList className={`grid w-full ${userRole === 'hr' ? 'grid-cols-3' : 'grid-cols-2'} min-h-[44px]`}>
+          <TabsTrigger value="applications" className="text-[10px] sm:text-sm min-h-[44px] px-1 sm:px-3">
+            <span className="hidden sm:inline">Application Trends</span>
+            <span className="sm:hidden">Apps</span>
+          </TabsTrigger>
+          {userRole === 'hr' && (
+            <TabsTrigger value="properties" className="text-[10px] sm:text-sm min-h-[44px] px-1 sm:px-3">
+              <span className="hidden sm:inline">Property Performance</span>
+              <span className="sm:hidden">Props</span>
+            </TabsTrigger>
+          )}
+          <TabsTrigger value="employees" className="text-[10px] sm:text-sm min-h-[44px] px-1 sm:px-3">
+            <span className="hidden sm:inline">Employee Analytics</span>
+            <span className="sm:hidden">Emps</span>
+          </TabsTrigger>
         </TabsList>
 
         {/* Application Trends Tab */}
         <TabsContent value="applications">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
             {/* Application Status Overview */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center">
-                  <PieChart className="h-5 w-5 mr-2" />
-                  Application Status Breakdown
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center text-base sm:text-lg">
+                  <PieChart className="h-4 w-4 sm:h-5 sm:w-5 mr-2 flex-shrink-0" />
+                  <span>Application Status Breakdown</span>
                 </CardTitle>
               </CardHeader>
               <CardContent>
