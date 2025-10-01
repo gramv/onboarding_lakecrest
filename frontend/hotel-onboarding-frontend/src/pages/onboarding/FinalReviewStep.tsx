@@ -184,23 +184,23 @@ export default function FinalReviewStep({
   return (
     <StepContainer errors={errors} saveStatus={saveStatus}>
       <StepContentWrapper>
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
       {/* Step Header */}
       <div className="text-center">
-        <div className="flex items-center justify-center space-x-2 mb-4">
-          <FileText className="h-6 w-6 text-blue-600" />
-          <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+        <div className="flex items-center justify-center space-x-2 mb-3 sm:mb-4">
+          <FileText className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+          <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t.title}</h1>
         </div>
-        <p className="text-gray-600 max-w-3xl mx-auto">
+        <p className="text-sm sm:text-base text-gray-600 max-w-3xl mx-auto px-4">
           {t.description}
         </p>
       </div>
 
       {/* Progress Indicator */}
       {isComplete && (
-        <Alert className="bg-green-50 border-green-200">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800">
+        <Alert className="bg-green-50 border-green-200 p-3 sm:p-4">
+          <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
+          <AlertDescription className="text-sm sm:text-base text-green-800">
             {t.completedNotice}
           </AlertDescription>
         </Alert>
@@ -208,46 +208,46 @@ export default function FinalReviewStep({
 
       {/* Onboarding Summary */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <Users className="h-5 w-5 text-blue-600" />
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+            <Users className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
             <span>{t.reviewSummary}</span>
           </CardTitle>
-          <p className="text-sm text-gray-600">{t.reviewSummaryDesc}</p>
+          <p className="text-xs sm:text-sm text-gray-600">{t.reviewSummaryDesc}</p>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
+        <CardContent className="p-4 sm:p-6">
+          <div className="space-y-3 sm:space-y-4">
             {/* Overall Progress */}
-            <div className="bg-blue-50 rounded-lg p-4">
+            <div className="bg-blue-50 rounded-lg p-3 sm:p-4">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-medium text-blue-900">{t.overallProgress}</span>
-                <span className="text-lg font-bold text-blue-600">{completionPercentage}%</span>
+                <span className="text-sm sm:text-base font-medium text-blue-900">{t.overallProgress}</span>
+                <span className="text-base sm:text-lg font-bold text-blue-600">{completionPercentage}%</span>
               </div>
-              <div className="w-full bg-blue-200 rounded-full h-3">
+              <div className="w-full bg-blue-200 rounded-full h-2 sm:h-3">
                 <div
-                  className="bg-blue-600 h-3 rounded-full transition-all duration-300"
+                  className="bg-blue-600 h-2 sm:h-3 rounded-full transition-all duration-300"
                   style={{ width: `${completionPercentage}%` }}
                 />
               </div>
-              <p className="text-sm text-blue-700 mt-2">
+              <p className="text-xs sm:text-sm text-blue-700 mt-2">
                 {completedSteps.length} of {totalSteps} {t.stepsCompleted}
               </p>
             </div>
 
             {/* Step by Step Status */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
               {Object.entries(t.stepStatuses).map(([stepId, stepTitle]) => {
                 const isCompleted = getStepStatus(stepId)
                 return (
-                  <div key={stepId} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <span className="text-sm font-medium text-gray-700">{stepTitle}</span>
-                    <div className="flex items-center space-x-2">
+                  <div key={stepId} className="flex items-center justify-between p-2 sm:p-3 bg-gray-50 rounded-lg">
+                    <span className="text-xs sm:text-sm font-medium text-gray-700 truncate pr-2">{stepTitle}</span>
+                    <div className="flex items-center space-x-1 sm:space-x-2 flex-shrink-0">
                       {isCompleted ? (
-                        <CheckCircle className="h-4 w-4 text-green-600" />
+                        <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 flex-shrink-0" />
                       ) : (
-                        <Clock className="h-4 w-4 text-gray-400" />
+                        <Clock className="h-3 w-3 sm:h-4 sm:w-4 text-gray-400 flex-shrink-0" />
                       )}
-                      <span className="text-sm font-medium">
+                      <span className="text-xs sm:text-sm font-medium">
                         {isCompleted ? t.complete : t.pending}
                       </span>
                     </div>
@@ -261,24 +261,24 @@ export default function FinalReviewStep({
 
       {/* Final Acknowledgments */}
       <Card className="border-orange-200 bg-orange-50">
-        <CardHeader>
-          <CardTitle className="text-lg flex items-center space-x-2 text-orange-800">
-            <Shield className="h-5 w-5" />
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg flex items-center space-x-2 text-orange-800">
+            <Shield className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
             <span>{t.finalAcknowledgments}</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-3 sm:space-y-4 p-4 sm:p-6">
           {[t.acknowledgment1, t.acknowledgment2, t.acknowledgment3, t.acknowledgment4].map((acknowledgment, index) => (
-            <div key={index} className="flex items-start space-x-3">
+            <div key={index} className="flex items-start space-x-2 sm:space-x-3">
               <Checkbox
                 id={`acknowledgment-${index}`}
                 checked={finalAcknowledgments[index]}
                 onCheckedChange={(checked) => handleAcknowledgmentChange(index, checked as boolean)}
-                className="mt-1"
+                className="mt-0.5 sm:mt-1 h-5 w-5 sm:h-4 sm:w-4"
               />
               <label
                 htmlFor={`acknowledgment-${index}`}
-                className="text-sm text-orange-800 leading-relaxed cursor-pointer"
+                className="text-xs sm:text-sm text-orange-800 leading-relaxed cursor-pointer"
               >
                 {acknowledgment}
               </label>
@@ -289,14 +289,14 @@ export default function FinalReviewStep({
 
       {/* Final Signature */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <FileText className="h-5 w-5 text-blue-600" />
+        <CardHeader className="p-4 sm:p-6">
+          <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+            <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
             <span>{t.finalSignature}</span>
           </CardTitle>
-          <p className="text-sm text-gray-600">{t.signatureDesc}</p>
+          <p className="text-xs sm:text-sm text-gray-600">{t.signatureDesc}</p>
         </CardHeader>
-        <CardContent>
+        <CardContent className="p-4 sm:p-6">
           <DigitalSignatureCapture
             documentName="Employee Onboarding Completion"
             signerName={employee?.firstName + ' ' + employee?.lastName || 'Employee'}
@@ -316,21 +316,21 @@ export default function FinalReviewStep({
 
       {/* Completion Status */}
       {isComplete && (
-        <div className="bg-green-50 rounded-lg p-6 text-center">
-          <CheckCircle className="h-12 w-12 text-green-600 mx-auto mb-3" />
-          <h3 className="text-lg font-semibold text-green-800 mb-2">Onboarding Completed</h3>
-          <p className="text-green-700">{t.completedNotice}</p>
+        <div className="bg-green-50 rounded-lg p-4 sm:p-6 text-center">
+          <CheckCircle className="h-10 w-10 sm:h-12 sm:w-12 text-green-600 mx-auto mb-2 sm:mb-3" />
+          <h3 className="text-base sm:text-lg font-semibold text-green-800 mb-2">Onboarding Completed</h3>
+          <p className="text-sm sm:text-base text-green-700">{t.completedNotice}</p>
         </div>
       )}
 
         {/* Legal Notice */}
-        <div className="text-xs text-gray-500 border-t pt-4">
+        <div className="text-[10px] sm:text-xs text-gray-500 border-t pt-3 sm:pt-4 px-2 sm:px-0">
           <p className="mb-2"><strong>{t.legalNoticeTitle}</strong> {t.legalNoticeMessage}</p>
           <p>{t.complianceMessage}</p>
         </div>
 
       {/* Estimated Time */}
-      <div className="text-center text-sm text-gray-500">
+      <div className="text-center text-xs sm:text-sm text-gray-500">
         <p>{t.estimatedTime}</p>
       </div>
 
