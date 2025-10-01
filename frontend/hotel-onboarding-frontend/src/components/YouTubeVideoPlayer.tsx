@@ -79,13 +79,17 @@ const YouTubeVideoPlayer: React.FC<YouTubeVideoPlayerProps> = ({
           setCurrentTime(parsed.currentTime)
         }
         if (parsed.percentage >= minimumWatchPercentage) {
+          console.log('🎥 Video already completed (from storage)! Percentage:', parsed.percentage)
           setHasCompleted(true)
+          // CRITICAL FIX: Call onComplete to sync parent component state
+          onComplete()
+          console.log('✅ Called onComplete() on mount to sync parent state')
         }
       } catch (e) {
         console.error('Failed to load video progress:', e)
       }
     }
-  }, [videoId, minimumWatchPercentage])
+  }, [videoId, minimumWatchPercentage, onComplete])
 
   // Save progress to sessionStorage
   const saveProgress = useCallback((time: number, percentage: number) => {
@@ -185,14 +189,21 @@ const YouTubeVideoPlayer: React.FC<YouTubeVideoPlayerProps> = ({
     intervalRef.current = setInterval(() => {
       if (player && player.getCurrentTime) {
         const current = player.getCurrentTime()
-        
+
+        // CRITICAL FIX: Reset hasCompleted if video is replayed from beginning
+        // This allows users to re-watch and trigger onComplete again
+        if (current < 10 && hasCompleted) {
+          console.log('🔄 Video replayed from beginning - resetting completion status')
+          setHasCompleted(false)
+        }
+
         // Check if user tried to skip forward
         const maxAllowedTime = lastValidTime + 1.5 // Allow 1.5 seconds forward max
-        
+
         if (current > maxAllowedTime) {
           // User tried to skip - force them back
           player.seekTo(lastValidTime, true)
-          
+
           // Show warning
           const warningEl = document.getElementById('seek-warning')
           if (warningEl) {
@@ -219,11 +230,15 @@ const YouTubeVideoPlayer: React.FC<YouTubeVideoPlayerProps> = ({
         
         setWatchedPercentage(percentage)
         saveProgress(current, percentage)
-        
+
         // Check if completed
+        // CRITICAL FIX: Removed !hasCompleted guard to allow re-completion
+        // This ensures onComplete is called whenever threshold is reached
         if (percentage >= minimumWatchPercentage && !hasCompleted) {
+          console.log('🎬 Video reached completion threshold! Calling onComplete()...')
           setHasCompleted(true)
           onComplete()
+          console.log('✅ onComplete() called successfully')
         }
       }
     }, 250) // Check every 250ms for more responsive skip prevention

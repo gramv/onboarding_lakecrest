@@ -157,6 +157,27 @@ const HumanTraffickingAwareness: React.FC<HumanTraffickingAwarenessProps> = ({
   const currentContent = content[language];
   const sections = currentContent.sections;
 
+  // CRITICAL FIX: Sync hasWatchedVideo state with YouTubeVideoPlayer's session storage on mount
+  // This ensures the button enables correctly even if states are out of sync
+  useEffect(() => {
+    const videoId = currentContent.video.videoId;
+    const videoProgress = sessionStorage.getItem(`video_progress_${videoId}`);
+
+    if (videoProgress) {
+      try {
+        const parsed = JSON.parse(videoProgress);
+        if (parsed.percentage >= 95 && !hasWatchedVideo) {
+          console.log('🔄 Syncing video completion from YouTubeVideoPlayer storage');
+          console.log('📊 Video completion percentage:', parsed.percentage);
+          setHasWatchedVideo(true);
+          console.log('✅ hasWatchedVideo set to true from video storage');
+        }
+      } catch (e) {
+        console.error('Failed to parse video progress:', e);
+      }
+    }
+  }, []); // Run once on mount
+
   // Save progress to session storage whenever state changes
   useEffect(() => {
     const progressData = {
@@ -170,17 +191,23 @@ const HumanTraffickingAwareness: React.FC<HumanTraffickingAwarenessProps> = ({
 
   const handleVideoComplete = () => {
     console.log('📹 Video completed! Enabling continue button...');
+    console.log('🎯 Setting hasWatchedVideo to true');
     setHasWatchedVideo(true);
+    console.log('✅ handleVideoComplete finished');
   };
 
   // Auto-scroll to continue button when video completes
   useEffect(() => {
     if (hasWatchedVideo && currentSection === sections.length) {
       console.log('✅ Video watched! Scrolling to continue button...');
+      console.log('🔍 Current state - hasWatchedVideo:', hasWatchedVideo, 'currentSection:', currentSection);
       setTimeout(() => {
         const continueButton = document.querySelector('button:not(:disabled)[class*="green"]');
         if (continueButton) {
+          console.log('🎯 Found continue button, scrolling into view');
           continueButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } else {
+          console.warn('⚠️ Continue button not found in DOM');
         }
       }, 500);
     }
@@ -281,7 +308,10 @@ const HumanTraffickingAwareness: React.FC<HumanTraffickingAwarenessProps> = ({
           {language === 'es' ? 'Video de Capacitación' : 'Training Video'}
         </div>
         <button
-          onClick={handleNext}
+          onClick={() => {
+            console.log('🖱️ Continue button clicked - hasWatchedVideo:', hasWatchedVideo);
+            handleNext();
+          }}
           disabled={!hasWatchedVideo}
           className={`w-full sm:w-auto px-4 py-3 sm:px-8 sm:py-4 rounded-lg font-semibold transition-all duration-300 min-h-[44px] text-sm sm:text-base ${
             hasWatchedVideo
@@ -291,6 +321,12 @@ const HumanTraffickingAwareness: React.FC<HumanTraffickingAwarenessProps> = ({
         >
           {hasWatchedVideo && '✓ '}
           {language === 'es' ? 'Continuar al Reconocimiento' : 'Continue to Acknowledgment'}
+          {/* Debug indicator in dev mode */}
+          {process.env.NODE_ENV === 'development' && (
+            <span className="ml-2 text-xs opacity-50">
+              [{hasWatchedVideo ? 'ENABLED' : 'DISABLED'}]
+            </span>
+          )}
         </button>
       </div>
     </div>
