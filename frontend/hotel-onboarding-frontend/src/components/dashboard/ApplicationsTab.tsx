@@ -1033,35 +1033,39 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
 
   return (
     <Card className="transition-opacity duration-300 opacity-100">
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <CardTitle>Applications Management</CardTitle>
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
+            <CardTitle className="text-lg sm:text-xl">Applications Management</CardTitle>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-3 sm:p-4 md:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="applications">Applications</TabsTrigger>
-            <TabsTrigger value="talent-pool">
-              Talent Pool ({talentPoolCandidates.length})
+          <TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6 min-h-[44px]">
+            <TabsTrigger value="applications" className="text-xs sm:text-sm min-h-[44px]">
+              <span className="hidden sm:inline">Applications</span>
+              <span className="sm:hidden">Apps</span>
+            </TabsTrigger>
+            <TabsTrigger value="talent-pool" className="text-xs sm:text-sm min-h-[44px]">
+              <span className="hidden sm:inline">Talent Pool ({talentPoolCandidates.length})</span>
+              <span className="sm:hidden">Pool ({talentPoolCandidates.length})</span>
             </TabsTrigger>
           </TabsList>
           
-          <TabsContent value="applications" className="space-y-4">
+          <TabsContent value="applications" className="space-y-3 sm:space-y-4">
         {/* Compact Search and Filter Bar */}
-        <div className="mb-4">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="mb-3 sm:mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
             {/* Search Bar */}
-            <div className="flex-1 min-w-[280px]">
+            <div className="flex-1 w-full sm:min-w-[280px]">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 flex-shrink-0" />
                 <Input
                   placeholder="Search applications..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-9"
+                  className="pl-10 min-h-[44px] text-sm sm:text-base"
                 />
               </div>
             </div>
@@ -1072,17 +1076,18 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
               size="sm"
               onClick={() => fetchApplications()}
               disabled={loading}
-              className="h-9"
+              className="min-h-[44px] w-full sm:w-auto"
             >
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`h-4 w-4 flex-shrink-0 ${loading ? 'animate-spin' : ''}`} />
+              <span className="sm:hidden ml-2">Refresh</span>
             </Button>
             
             {/* Compact Filters */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               {/* Property Filter (HR only) */}
               {userRole === 'hr' && (
                 <Select value={propertyFilter} onValueChange={setPropertyFilter}>
-                  <SelectTrigger className="w-[120px] h-9 text-sm">
+                  <SelectTrigger className="w-full sm:w-[120px] min-h-[44px] text-xs sm:text-sm">
                     <SelectValue placeholder="Property" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1095,10 +1100,10 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                   </SelectContent>
                 </Select>
               )}
-              
+
               {/* Department Filter */}
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
-                <SelectTrigger className="w-[120px] h-9 text-sm">
+                <SelectTrigger className="flex-1 sm:w-[120px] min-h-[44px] text-xs sm:text-sm">
                   <SelectValue placeholder="Department" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1110,10 +1115,10 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                   ))}
                 </SelectContent>
               </Select>
-              
+
               {/* Status Filter */}
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[100px] h-9 text-sm">
+                <SelectTrigger className="flex-1 sm:w-[100px] min-h-[44px] text-xs sm:text-sm">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1151,30 +1156,30 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
             
             {/* Bulk Actions */}
             {selectedApplicationIds.length > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600">
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-xs sm:text-sm text-gray-600">
                   {selectedApplicationIds.length} selected
                 </span>
                 <Button
                   variant="outline"
                   size="sm"
                   onClick={() => setIsBulkStatusModalOpen(true)}
-                  className="h-9 px-3 text-sm"
+                  className="min-h-[44px] px-3 text-xs sm:text-sm flex-1 sm:flex-none"
                 >
-                  <Users className="h-4 w-4 mr-1" />
-                  Bulk Update
+                  <Users className="h-4 w-4 mr-1 flex-shrink-0" />
+                  <span>Bulk Update</span>
                 </Button>
               </div>
             )}
-            
+
             {/* Action Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={clearFilters}
                 disabled={!searchQuery && statusFilter === 'all' && departmentFilter === 'all' && propertyFilter === 'all'}
-                className="h-9 px-3 text-sm"
+                className="min-h-[44px] px-3 text-xs sm:text-sm flex-1 sm:flex-none"
               >
                 Clear
               </Button>
@@ -1182,27 +1187,27 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                 variant="outline"
                 size="sm"
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="h-9 px-3 text-sm"
+                className="min-h-[44px] px-3 text-xs sm:text-sm flex-1 sm:flex-none"
               >
-                <Filter className="h-4 w-4 mr-1" />
-                Filters
+                <Filter className="h-4 w-4 mr-1 flex-shrink-0" />
+                <span>Filters</span>
               </Button>
             </div>
           </div>
           
           {/* Results Summary */}
-          <div className="flex items-center justify-between mt-2 text-sm text-gray-500">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mt-2 text-xs sm:text-sm text-gray-500">
             <span>
               {applications.length} applications
             </span>
             {(searchQuery || statusFilter !== 'all' || departmentFilter !== 'all' || propertyFilter !== 'all') && (
-              <span className="text-blue-600 text-xs">Filters active</span>
+              <span className="text-blue-600 text-[10px] sm:text-xs">Filters active</span>
             )}
           </div>
           {/* Manager quick QR access */}
           {userRole === 'manager' && currentProperty?.id && (
-            <div className="mt-2">
-              <QRCodeDisplay 
+            <div className="mt-2 sm:mt-3">
+              <QRCodeDisplay
                 property={{
                   id: currentProperty.id,
                   name: currentProperty.name,
@@ -1217,14 +1222,14 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
 
         {/* Advanced Filters Section */}
         {showAdvancedFilters && (
-          <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
-            <div className="mb-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Advanced Filters</h3>
-              <p className="text-sm text-gray-600">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <div className="mb-3 sm:mb-4">
+              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1 sm:mb-2">Advanced Filters</h3>
+              <p className="text-xs sm:text-sm text-gray-600">
                 Use these advanced filters when basic filtering doesn't meet your needs.
               </p>
             </div>
-            <div className="text-sm text-gray-500">
+            <div className="text-xs sm:text-sm text-gray-500">
               Advanced filtering options are available in the table below. Use the search and filter controls in the table header.
             </div>
           </div>
@@ -1259,29 +1264,29 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
         />
           </TabsContent>
           
-          <TabsContent value="talent-pool" className="space-y-4">
+          <TabsContent value="talent-pool" className="space-y-3 sm:space-y-4">
             {/* Talent Pool Search and Filter Bar */}
-            <div className="mb-4">
-              <div className="flex items-center gap-3 flex-wrap">
+            <div className="mb-3 sm:mb-4">
+              <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
                 {/* Search Bar */}
-                <div className="flex-1 min-w-[280px]">
+                <div className="flex-1 w-full sm:min-w-[280px]">
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 flex-shrink-0" />
                     <Input
                       placeholder="Search talent pool candidates..."
                       value={talentPoolSearchQuery}
                       onChange={(e) => setTalentPoolSearchQuery(e.target.value)}
-                      className="pl-10 h-9"
+                      className="pl-10 min-h-[44px] text-sm sm:text-base"
                     />
                   </div>
                 </div>
-                
+
                 {/* Compact Filters */}
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                   {/* Property Filter (HR only) */}
                   {userRole === 'hr' && (
                     <Select value={talentPoolPropertyFilter} onValueChange={setTalentPoolPropertyFilter}>
-                      <SelectTrigger className="w-[120px] h-9 text-sm">
+                      <SelectTrigger className="w-full sm:w-[120px] min-h-[44px] text-xs sm:text-sm">
                         <SelectValue placeholder="Property" />
                       </SelectTrigger>
                       <SelectContent>
@@ -1294,10 +1299,10 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                       </SelectContent>
                     </Select>
                   )}
-                  
+
                   {/* Department Filter */}
                   <Select value={talentPoolDepartmentFilter} onValueChange={setTalentPoolDepartmentFilter}>
-                    <SelectTrigger className="w-[120px] h-9 text-sm">
+                    <SelectTrigger className="flex-1 sm:w-[120px] min-h-[44px] text-xs sm:text-sm">
                       <SelectValue placeholder="Department" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1309,10 +1314,10 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                       ))}
                     </SelectContent>
                   </Select>
-                  
+
                   {/* Position Filter */}
                   <Select value={talentPoolPositionFilter} onValueChange={setTalentPoolPositionFilter}>
-                    <SelectTrigger className="w-[120px] h-9 text-sm">
+                    <SelectTrigger className="flex-1 sm:w-[120px] min-h-[44px] text-xs sm:text-sm">
                       <SelectValue placeholder="Position" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1325,11 +1330,11 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                     </SelectContent>
                   </Select>
                 </div>
-                
+
                 {/* Bulk Actions */}
                 {selectedTalentPoolIds.length > 0 && (
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm text-gray-600">
+                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                    <span className="text-xs sm:text-sm text-gray-600">
                       {selectedTalentPoolIds.length} selected
                     </span>
                     <Button
@@ -1339,10 +1344,10 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                         setBulkActionType('email')
                         setIsBulkActionModalOpen(true)
                       }}
-                      className="h-9 px-3 text-sm"
+                      className="min-h-[44px] px-3 text-xs sm:text-sm"
                     >
-                      <Mail className="h-4 w-4 mr-1" />
-                      Email
+                      <Mail className="h-4 w-4 mr-1 flex-shrink-0" />
+                      <span>Email</span>
                     </Button>
                     <Button
                       variant="outline"
@@ -1351,22 +1356,22 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                         setBulkActionType('reactivate')
                         setIsBulkActionModalOpen(true)
                       }}
-                      className="h-9 px-3 text-sm"
+                      className="min-h-[44px] px-3 text-xs sm:text-sm"
                     >
-                      <RotateCcw className="h-4 w-4 mr-1" />
-                      Reactivate
+                      <RotateCcw className="h-4 w-4 mr-1 flex-shrink-0" />
+                      <span>Reactivate</span>
                     </Button>
                   </div>
                 )}
               </div>
-              
+
               {/* Results Summary */}
-              <div className="flex items-center justify-between mt-2 text-sm text-gray-500">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mt-2 text-xs sm:text-sm text-gray-500">
                 <span>
                   {talentPoolCandidates.length} candidates in talent pool
                 </span>
                 {selectedTalentPoolIds.length > 0 && (
-                  <span className="text-blue-600 text-xs">
+                  <span className="text-blue-600 text-[10px] sm:text-xs">
                     {selectedTalentPoolIds.length} selected
                   </span>
                 )}
@@ -1375,11 +1380,11 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
 
             {/* Talent Pool Candidates Table */}
             {talentPoolLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <div className="text-gray-500">Loading talent pool candidates...</div>
+              <div className="flex items-center justify-center py-6 sm:py-8">
+                <div className="text-xs sm:text-sm text-gray-500">Loading talent pool candidates...</div>
               </div>
             ) : (
-              <div className="border rounded-lg">
+              <div className="border rounded-lg overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow>
