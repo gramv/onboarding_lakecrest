@@ -87,10 +87,10 @@ export default function WelcomeStep({
       <StepContentWrapper>
         <div className="space-y-6">
         {/* Clean Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-heading-primary">{t.greeting}</h1>
-          <p className="text-heading-secondary text-blue-600">{t.propertyInfo}</p>
-          <p className="text-body-large text-gray-600">{t.title}</p>
+        <div className="text-center space-y-2 px-4">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900">{t.greeting}</h1>
+          <p className="text-lg sm:text-xl md:text-2xl font-semibold text-blue-600">{t.propertyInfo}</p>
+          <p className="text-base sm:text-lg text-gray-600">{t.title}</p>
         </div>
 
         {/* Completion Alert */}
@@ -107,22 +107,22 @@ export default function WelcomeStep({
         <Card className="card-transition">
           <CardContent className="pt-6 space-y-4">
             {/* Time Estimate */}
-            <div className="flex items-center justify-center space-x-2 text-blue-600 bg-blue-50 rounded-lg p-3">
-              <Clock className="h-5 w-5" />
-              <span className="text-body-small font-medium">{t.estimatedTime}</span>
+            <div className="flex items-center justify-center space-x-2 text-blue-600 bg-blue-50 rounded-lg p-3 sm:p-4">
+              <Clock className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+              <span className="text-sm sm:text-base font-medium">{t.estimatedTime}</span>
             </div>
 
             {/* Requirements List */}
             <div>
-              <h3 className="text-body-default font-semibold text-gray-900 mb-3 flex items-center">
-                <FileText className="h-4 w-4 mr-2" />
+              <h3 className="text-sm sm:text-base font-semibold text-gray-900 mb-3 flex items-center">
+                <FileText className="h-4 w-4 mr-2 flex-shrink-0" />
                 {t.whatYouNeed}
               </h3>
-              <ul className="space-y-2">
+              <ul className="space-y-2 sm:space-y-3">
                 {t.requirements.map((req, index) => (
                   <li key={index} className="flex items-start">
-                    <span className="text-green-500 mr-2">✓</span>
-                    <span className="text-body-default text-gray-700">{req}</span>
+                    <span className="text-green-500 mr-2 text-lg sm:text-xl flex-shrink-0">✓</span>
+                    <span className="text-sm sm:text-base text-gray-700">{req}</span>
                   </li>
                 ))}
               </ul>
@@ -131,23 +131,23 @@ export default function WelcomeStep({
         </Card>
 
         {/* Acknowledgement Section */}
-        <div className="mt-8">
+        <div className="mt-6 sm:mt-8 px-4">
           <div className="max-w-2xl mx-auto">
             <div className={cn(
-              "relative rounded-xl border-2 p-6 transition-all duration-300",
+              "relative rounded-xl border-2 p-4 sm:p-6 transition-all duration-300",
               formData.welcomeAcknowledged
                 ? "border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 shadow-lg"
                 : "border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 hover:border-blue-300 hover:shadow-md"
             )}>
               {/* Decorative corner accent */}
               <div className={cn(
-                "absolute top-0 right-0 w-16 h-16 rounded-bl-3xl transition-colors duration-300",
+                "absolute top-0 right-0 w-12 h-12 sm:w-16 sm:h-16 rounded-bl-3xl transition-colors duration-300",
                 formData.welcomeAcknowledged ? "bg-green-100" : "bg-blue-100"
               )} />
 
               <div className="relative">
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 mt-1">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="flex-shrink-0 mt-0.5 sm:mt-1">
                     <Checkbox
                       id="welcome-acknowledgement"
                       checked={formData.welcomeAcknowledged}
@@ -158,7 +158,7 @@ export default function WelcomeStep({
                         }))
                       }
                       className={cn(
-                        "transition-all duration-200",
+                        "transition-all duration-200 h-6 w-6 sm:h-5 sm:w-5",
                         formData.welcomeAcknowledged
                           ? "border-green-500 data-[state=checked]:bg-green-600"
                           : "border-blue-400 hover:border-blue-500"
@@ -166,21 +166,27 @@ export default function WelcomeStep({
                     />
                   </div>
 
-                  <div className="flex-1">
+                  <div className="flex-1 min-w-0">
                     <Label
                       htmlFor="welcome-acknowledgement"
                       className={cn(
-                        "text-base font-medium leading-relaxed cursor-pointer transition-colors duration-200",
+                        "text-sm sm:text-base font-medium leading-relaxed cursor-pointer transition-colors duration-200",
                         formData.welcomeAcknowledged ? "text-green-800" : "text-blue-800 hover:text-blue-900"
                       )}
                     >
-                      I've reviewed what to expect and I'm ready to start my onboarding process.
+                      {language === 'es'
+                        ? 'He revisado qué esperar y estoy listo para comenzar mi proceso de incorporación.'
+                        : "I've reviewed what to expect and I'm ready to start my onboarding process."}
                     </Label>
 
                     {formData.welcomeAcknowledged && (
-                      <div className="mt-3 flex items-center gap-2 text-sm text-green-700">
-                        <CheckCircle className="h-4 w-4" />
-                        <span className="font-medium">Ready to proceed! Click Next to continue.</span>
+                      <div className="mt-2 sm:mt-3 flex items-center gap-2 text-xs sm:text-sm text-green-700">
+                        <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0" />
+                        <span className="font-medium">
+                          {language === 'es'
+                            ? '¡Listo para continuar! Haga clic en Siguiente para continuar.'
+                            : 'Ready to proceed! Click Next to continue.'}
+                        </span>
                       </div>
                     )}
                   </div>
@@ -189,10 +195,14 @@ export default function WelcomeStep({
             </div>
 
             {!formData.welcomeAcknowledged && (
-              <div className="mt-4 text-center">
-                <p className="text-sm text-gray-600 flex items-center justify-center gap-2">
-                  <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
-                  Please check the box above to enable the Next button
+              <div className="mt-3 sm:mt-4 text-center px-2">
+                <p className="text-xs sm:text-sm text-gray-600 flex items-center justify-center gap-2">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse flex-shrink-0"></span>
+                  <span>
+                    {language === 'es'
+                      ? 'Marque la casilla de arriba para habilitar el botón Siguiente'
+                      : 'Please check the box above to enable the Next button'}
+                  </span>
                 </p>
               </div>
             )}
