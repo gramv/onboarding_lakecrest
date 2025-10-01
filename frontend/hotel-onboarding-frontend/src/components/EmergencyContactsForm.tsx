@@ -221,7 +221,6 @@ export default function EmergencyContactsForm({
   return (
     <div className="space-y-4">
       <div className="text-center mb-4">
-        <Phone className="h-8 w-8 text-blue-600 mx-auto mb-2" />
         <h2 className="sr-only text-xl font-bold text-gray-900">{t('emergency_contacts')}</h2>
         <p className="sr-only text-gray-600 text-sm mt-1">{t('emergency_contacts_desc')}</p>
       </div>
@@ -534,24 +533,10 @@ export default function EmergencyContactsForm({
         </AlertDescription>
       </Alert>
 
-      {/* Navigation - Compact */}
-      {!useMainNavigation && (
-        <div className="flex justify-between items-center pt-4">
-          <Button variant="outline" onClick={onBack} size="sm">
-            {t('back')}
-          </Button>
-          <Button onClick={handleSubmit} className="px-6" size="sm">
-            {t('save_continue')}
-          </Button>
-        </div>
-      )}
-      
-      {/* Hidden save button for main navigation */}
-      {useMainNavigation && (
-        <Button onClick={handleSubmit} className="hidden" disabled={!isValid}>
-          Save Emergency Contacts
-        </Button>
-      )}
+      {/* Hidden submit allows parent navigation to trigger validation */}
+      <Button onClick={handleSubmit} className="hidden" disabled={!isValid}>
+        Save Emergency Contacts
+      </Button>
     </div>
   );
 }

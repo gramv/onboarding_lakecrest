@@ -9,6 +9,8 @@ import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { FormSection } from '@/components/ui/form-section'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
+import { getApiUrl } from '@/config/api'
 
 interface WeaponsPolicyData {
   hasReadPolicy: boolean
@@ -38,9 +40,12 @@ export default function WeaponsPolicyStep({
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   const [formData, setFormData] = useState<WeaponsPolicyData>({
@@ -244,6 +249,8 @@ export default function WeaponsPolicyStep({
   )
 
   const canProceedToReview = formData.hasReadPolicy && allAcknowledgmentsChecked
+  const isStepComplete = formData.hasReadPolicy && allAcknowledgmentsChecked && formData.isSigned
+
 
   const handleProceedToReview = () => {
     if (canProceedToReview) {
@@ -314,6 +321,19 @@ export default function WeaponsPolicyStep({
                 </div>
               </CardContent>
             </Card>
+
+            {/* Navigation */}
+            <NavigationButtons
+              showPrevious={true}
+              showNext={true}
+              onPrevious={goToPreviousStep || (() => {})}
+              onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+              disabled={saveStatus?.saving}
+              saving={saveStatus?.saving}
+              hasErrors={false}
+              language={language}
+              nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+            />
           </div>
         </StepContentWrapper>
       </StepContainer>
@@ -354,7 +374,7 @@ export default function WeaponsPolicyStep({
                 requiresWitness: false
               }}
               usePDFPreview={true}
-              pdfEndpoint={`${import.meta.env.VITE_API_URL || '/api'}/api/onboarding/${employee?.id || 'test-employee'}/weapons-policy/generate-pdf`}
+              pdfEndpoint={`${getApiUrl()}/onboarding/${employee?.id || 'test-employee'}/weapons-policy/generate-pdf`}
             />
           </FormSection>
         </StepContentWrapper>
@@ -508,6 +528,19 @@ export default function WeaponsPolicyStep({
               </div>
             </div>
           </div>
+
+          {/* Navigation */}
+          <NavigationButtons
+            showPrevious={true}
+            showNext={true}
+            onPrevious={goToPreviousStep || (() => {})}
+            onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+            disabled={saveStatus?.saving || !isStepComplete}
+            saving={saveStatus?.saving}
+            hasErrors={false}
+            language={language}
+            nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+          />
         </div>
       </StepContentWrapper>
     </StepContainer>

@@ -79,7 +79,7 @@ export default function BackgroundCheckStep(props: StepProps) {
   const t = translations[language]
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32">
       <div className="text-center">
         <div className="flex items-center justify-center space-x-2 mb-4">
           <Shield className="h-6 w-6 text-blue-600" />

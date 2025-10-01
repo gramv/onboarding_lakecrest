@@ -1,22 +1,23 @@
 import React, { useState, useEffect } from 'react'
-import { getApiUrl, getLegacyBaseUrl } from '@/config/api'
+import { getApiUrl } from '@/config/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import W4FormClean from '@/components/W4FormClean'
 import ReviewAndSign from '@/components/ReviewAndSign'
 import PDFViewer from '@/components/PDFViewer'
-import { CheckCircle, CreditCard, FileText, AlertTriangle, Calculator } from 'lucide-react'
+import { CheckCircle, CreditCard, FileText, AlertTriangle, AlertCircle, Loader2 } from 'lucide-react'
 import { FormSection } from '@/components/ui/form-section'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useStepValidation } from '@/hooks/useStepValidation'
-import { useComplianceValidation } from '@/hooks/useComplianceValidation'
-import { ComplianceAlert } from '@/components/ui/ComplianceAlert'
 import { w4FormValidator } from '@/utils/stepValidators'
-import { generateCleanW4Pdf } from '@/utils/w4PdfGeneratorClean'
+import { generateCleanW4Pdf, addSignatureToExistingW4Pdf } from '@/utils/w4PdfGeneratorClean'
 import axios from 'axios'
+import { fetchStepDocumentMetadata, persistStepDocument, listStepDocuments, StepDocumentMetadata } from '@/services/documentService'
+import { uploadOnboardingDocument } from '@/services/onboardingDocuments'
 
 interface W4Translations {
   title: string
@@ -36,20 +37,30 @@ export default function W4FormStep({
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
   property
 }: StepProps) {
-  
+
   const [formData, setFormData] = useState<any>({})
   const [showReview, setShowReview] = useState(false)
   const [isSigned, setIsSigned] = useState(false)
+  const [isSigningInProgress, setIsSigningInProgress] = useState(false)
   const [autoFillNotification, setAutoFillNotification] = useState<string | null>(null)
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
+  const [remotePdfUrl, setRemotePdfUrl] = useState<string | null>(null)
+  const [documentMetadata, setDocumentMetadata] = useState<StepDocumentMetadata | null>(null)
+  const [metadataLoading, setMetadataLoading] = useState(false)
+  const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [sessionToken, setSessionToken] = useState<string>('')
+  const [hasStoredDocument, setHasStoredDocument] = useState(false)
 
   // Validation hooks
   const { errors, fieldErrors, validate } = useStepValidation(w4FormValidator)
-  const complianceValidation = useComplianceValidation({ language, debounceMs: 500 })
+  // Removed useComplianceValidation - hook doesn't exist yet
+  // const complianceValidation = useComplianceValidation({ language, debounceMs: 500 })
 
   // Auto-save data
   const autoSaveData = {
@@ -69,20 +80,77 @@ export default function W4FormStep({
   // Validate W-4 form data when it changes
   useEffect(() => {
     if (formData && Object.keys(formData).length > 0) {
-      complianceValidation.validateW4Form(formData)
+      // complianceValidation.validateW4Form(formData)
     }
   }, [formData])
 
-  // Load existing W-4 data from cloud/session storage
+  useEffect(() => {
+    const token = sessionStorage.getItem('hotel_onboarding_token') || ''
+    setSessionToken(token)
+  }, [])
+
   useEffect(() => {
     const loadFormData = async () => {
       try {
+        setMetadataLoading(true)
+        setMetadataError(null)
+
+        // Load metadata first if employee has saved docs
+        if (employee?.id && !employee.id.startsWith('demo-') && sessionToken) {
+          try {
+            const [metadataResponse, documents] = await Promise.all([
+              fetchStepDocumentMetadata(employee.id, currentStep.id, sessionToken),
+              listStepDocuments(employee.id, currentStep.id, sessionToken)
+            ])
+
+            if (metadataResponse.document_metadata?.signed_url) {
+              setRemotePdfUrl(metadataResponse.document_metadata.signed_url)
+            }
+            setDocumentMetadata(metadataResponse.document_metadata ?? null)
+            setHasStoredDocument((metadataResponse.document_metadata?.signed_url?.length ?? 0) > 0 || documents.length > 0)
+
+            if (!documents || documents.length === 0) {
+              console.warn('No stored W-4 documents found in Supabase')
+            }
+          } catch (metaError) {
+            console.error('Failed to load W-4 document metadata:', metaError)
+            setMetadataError(metaError instanceof Error ? metaError.message : 'Unable to load stored W-4 document')
+          }
+        }
+        
         // Initialize data from multiple sources
         let initialData: any = {}
         let isAlreadySigned = false
-        let savedPdfUrl = null
-        
-        // First, check session storage (may have cloud data already loaded by portal)
+        let savedPdfUrl: string | null = null
+        let savedInlinePdf: string | null = null
+
+        // First, try to load from backend database
+        if (employee?.id && !employee.id.startsWith('demo-') && !employee.id.startsWith('test-')) {
+          try {
+            const apiUrl = getApiUrl()
+            const response = await axios.get(`${apiUrl}/onboarding/${employee.id}/w4-form`)
+
+            if (response.data?.success && response.data?.data) {
+              const w4Data = response.data.data
+              console.log('W4FormStep - Loaded from database:', w4Data)
+
+              if (w4Data.form_data) {
+                initialData = w4Data.form_data
+              }
+              if (w4Data.signed) {
+                isAlreadySigned = true
+              }
+              if (w4Data.signature_data) {
+                // Store signature data for later use
+                sessionStorage.setItem('w4_signature_data', JSON.stringify(w4Data.signature_data))
+              }
+            }
+          } catch (dbError) {
+            console.log('W4FormStep - No database data found or error loading:', dbError)
+          }
+        }
+
+        // Second, check session storage (may override database data)
         const savedW4Data = sessionStorage.getItem(`onboarding_${currentStep.id}_data`)
         console.log('W4FormStep - Loading saved data:', savedW4Data)
         
@@ -105,16 +173,38 @@ export default function W4FormStep({
               if (parsed.pdf_url) {
                 savedPdfUrl = parsed.pdf_url
               }
+              if (parsed.inlinePdfData) {
+                savedInlinePdf = parsed.inlinePdfData
+              }
             } else {
               // Flat structure - data directly in parsed object
               initialData = parsed
             }
             
+            // Migrate old filing status format to new format
+            if (initialData && initialData.filing_status) {
+              const oldToNewMapping: { [key: string]: string } = {
+                'Single': 'single',
+                'Single or Married filing separately': 'single',
+                'Married filing jointly': 'married_filing_jointly',
+                'Married filing jointly (or Qualifying surviving spouse)': 'married_filing_jointly',
+                'Head of household': 'head_of_household'
+              }
+
+              if (oldToNewMapping[initialData.filing_status]) {
+                console.log(`W4FormStep - Migrating filing status from "${initialData.filing_status}" to "${oldToNewMapping[initialData.filing_status]}"`)
+                initialData.filing_status = oldToNewMapping[initialData.filing_status]
+              }
+            }
+
             // Check if already signed
             if (parsed.isSigned || parsed.signed) {
               isAlreadySigned = true
               if (parsed.pdfUrl || parsed.pdf_url) {
                 savedPdfUrl = parsed.pdfUrl || parsed.pdf_url
+              }
+              if (parsed.inlinePdfData) {
+                savedInlinePdf = parsed.inlinePdfData
               }
             }
           } catch (e) {
@@ -144,6 +234,9 @@ export default function W4FormStep({
           // Restore PDF URL if available
           if (parsed.pdfUrl) {
             savedPdfUrl = parsed.pdfUrl
+          }
+          if (parsed.inlinePdfData) {
+            savedInlinePdf = parsed.inlinePdfData
           }
         }
         
@@ -205,13 +298,13 @@ export default function W4FormStep({
             
             // Determine filing status based on marital status - only fill if empty
             if (!autoFilledData.filing_status && personalInfo.maritalStatus) {
-              if (personalInfo.maritalStatus === 'single' || 
-                  personalInfo.maritalStatus === 'divorced' || 
+              if (personalInfo.maritalStatus === 'single' ||
+                  personalInfo.maritalStatus === 'divorced' ||
                   personalInfo.maritalStatus === 'widowed') {
-                autoFilledData.filing_status = 'single'
+                autoFilledData.filing_status = 'Single'
                 fieldsUpdated++
               } else if (personalInfo.maritalStatus === 'married') {
-                autoFilledData.filing_status = 'married_filing_jointly'
+                autoFilledData.filing_status = 'Married filing jointly'
                 fieldsUpdated++
               }
             }
@@ -248,145 +341,289 @@ export default function W4FormStep({
         if (isAlreadySigned) {
           setIsSigned(true)
           setShowReview(false)
-          if (savedPdfUrl) {
+          if (savedInlinePdf) {
+            setPdfUrl(savedInlinePdf)
+          } else if (savedPdfUrl) {
             setPdfUrl(savedPdfUrl)
           }
         }
       } catch (error) {
         console.error('Error loading W-4 data:', error)
+      } finally {
+        setMetadataLoading(false)
       }
     }
     
     loadFormData()
-  }, [currentStep.id, progress.completedSteps, language])
+  }, [currentStep.id, language, employee?.id, sessionToken]) // Removed progress.completedSteps to prevent reload after signing
 
   const handleFormComplete = async (data: any) => {
     // Validate the form data
     const validation = await validate(data)
-    
-    // Also run compliance validation
-    const complianceResult = complianceValidation.validateW4Form(data)
-    
-    if (validation.valid && (!complianceResult || complianceResult.validation?.isValid !== false)) {
+
+    if (validation.valid) {
       setFormData(data)
+
+      // Generate PDF preview when entering review mode (like I-9 does)
+      try {
+        console.log('Pre-generating W-4 PDF for review...')
+        console.log('🔍 DEBUG: Form data being passed to PDF generator:', JSON.stringify(data, null, 2))
+        const { base64String } = await generateUnsignedPdfPreview(data)
+        setPdfUrl(base64String)
+        console.log('✓ W-4 PDF pre-generated successfully')
+      } catch (error) {
+        console.error('Failed to pre-generate W-4 PDF:', error)
+        // Continue to review even if PDF generation fails
+      }
+
       setShowReview(true)
-    } else if (complianceResult?.validation && !complianceResult.validation.isValid) {
-      // Show compliance errors
-      console.error('W-4 compliance validation failed:', complianceResult.validation.errors)
+    }
+  }
+
+  const generateUnsignedPdfPreview = async (dataToUse?: any) => {
+    try {
+      // Don't regenerate if already signed
+      if (isSigned) {
+        console.log('W-4 already signed, skipping PDF regeneration')
+        return { base64String: pdfUrl || '', pdfFile: null }
+      }
+
+      console.log('Generating unsigned W-4 PDF for preview...')
+
+      // Use the passed data or fall back to component state
+      const pdfData = dataToUse || formData
+      console.log('🔍 DEBUG: Data being used for PDF generation:', JSON.stringify(pdfData, null, 2))
+
+      // Generate PDF without signature data
+      const pdfBytes = await generateCleanW4Pdf(pdfData)
+      const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const pdfFile = new File([pdfBlob], `w4-preview-${employee?.id || 'employee'}-${Date.now()}.pdf`, { type: 'application/pdf' })
+
+      const reader = new FileReader()
+      const base64String = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result
+          if (typeof result === 'string') {
+            resolve(result.split(',')[1] || '')
+          } else {
+            reject(new Error('Invalid PDF data'))
+          }
+        }
+        reader.onerror = () => reject(reader.error || new Error('Failed to read PDF file'))
+        reader.readAsDataURL(pdfBlob)
+      })
+
+      return { base64String, pdfFile }
+    } catch (error) {
+      console.error('Failed to generate unsigned W-4 PDF:', error)
+      throw error
+    }
+  }
+
+  const generateSignedPdfPreview = async (signatureData: any) => {
+    try {
+      console.log('Adding signature to existing W-4 PDF...')
+
+      // Use existing PDF if available, otherwise generate new one
+      let pdfBytes: Uint8Array
+
+      if (pdfUrl && !pdfUrl.startsWith('data:')) {
+        // If we have an existing PDF URL, use it as base
+        console.log('Using existing PDF as base for signature')
+        try {
+          const response = await fetch(pdfUrl)
+          const existingPdfBytes = await response.arrayBuffer()
+          pdfBytes = new Uint8Array(existingPdfBytes)
+        } catch (error) {
+          console.warn('Failed to load existing PDF, generating new one:', error)
+          const pdfFormData = {
+            ...formData,
+            signatureData: {
+              signature: signatureData.signature,
+              signedAt: signatureData.signedAt || new Date().toISOString()
+            }
+          }
+          pdfBytes = await generateCleanW4Pdf(pdfFormData)
+        }
+      } else {
+        // Generate new PDF with signature
+        const pdfFormData = {
+          ...formData,
+          signatureData: {
+            signature: signatureData.signature,
+            signedAt: signatureData.signedAt || new Date().toISOString()
+          }
+        }
+        pdfBytes = await generateCleanW4Pdf(pdfFormData)
+      }
+      const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' })
+      const pdfFile = new File([pdfBlob], `w4-${employee?.id || 'employee'}-${Date.now()}.pdf`, { type: 'application/pdf' })
+
+      const reader = new FileReader()
+      const base64String = await new Promise<string>((resolve, reject) => {
+        reader.onload = () => {
+          const result = reader.result
+          if (typeof result === 'string') {
+            resolve(result.split(',')[1] || '')
+          } else {
+            reject(new Error('Invalid PDF data'))
+          }
+        }
+        reader.onerror = () => reject(reader.error || new Error('Failed to read PDF file'))
+        reader.readAsDataURL(pdfBlob)
+      })
+
+      setPdfUrl(base64String)
+
+      return { base64String, pdfFile }
+    } catch (error) {
+      console.error('Failed to generate W-4 PDF:', error)
+      throw error
     }
   }
 
   const handleSign = async (signatureData: any) => {
-    const completeData = {
-      formData,
-      signed: true,
-      isSigned: true,
-      signatureData,
-      completedAt: new Date().toISOString()
+    // Guard against multiple concurrent sign operations
+    if (isSigningInProgress) {
+      console.log('Sign operation already in progress, ignoring duplicate request')
+      return
     }
-    
+
+    setIsSigningInProgress(true)
     setIsSigned(true)
-    
-    // Save to session storage immediately with both keys
-    sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify({
-      ...completeData,
-      showReview: true,
-      pdfUrl: null // Will be updated after PDF generation
-    }))
-    
-    // Also save to the alternate key for compatibility
-    sessionStorage.setItem('onboarding_w4-form_data', JSON.stringify(completeData))
-    
-    // Save progress to update controller's step data
-    await saveProgress(currentStep.id, completeData)
-    
-    await markStepComplete(currentStep.id, completeData)
-    
-    // Generate PDF with signature using frontend generator
+
     try {
-      console.log('Generating W-4 PDF with signature...')
-      
-      // Prepare form data for PDF generation
-      const pdfFormData = {
-        ...formData,
-        signatureData: {
-          signature: signatureData.signature,
-          signedAt: signatureData.signedAt || new Date().toISOString()
-        }
+      console.log('📝 W-4 Signing Process Started - Using I-9 Pattern')
+
+      // Step 1: Reuse existing preview PDF (don't regenerate!)
+      let basePdf = pdfUrl
+      if (!basePdf) {
+        console.log('⚠️ No preview PDF found, generating fresh preview first...')
+        const { base64String } = await generateSignedPdfPreview(null)
+        basePdf = base64String
       }
-      
-      // Generate PDF with transparent signature
-      const pdfBytes = await generateCleanW4Pdf(pdfFormData)
-      
-      // Convert to base64
-      let binary = ''
-      const chunkSize = 8192
-      for (let i = 0; i < pdfBytes.length; i += chunkSize) {
-        const chunk = pdfBytes.slice(i, i + chunkSize)
-        binary += String.fromCharCode.apply(null, Array.from(chunk))
+
+      if (!basePdf) {
+        console.error('❌ Unable to generate base W-4 PDF before signing')
+        setMetadataError('Failed to generate W-4 PDF')
+        return
       }
-      const base64String = btoa(binary)
-      
-      setPdfUrl(base64String)
-      
-      // Update session storage with PDF URL
-      const updatedData = {
-        ...completeData,
-        showReview: true,
-        pdfUrl: base64String
-      }
-      sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(updatedData))
-      sessionStorage.setItem('onboarding_w4-form_data', JSON.stringify(updatedData))
-      
-      // Also try to save to backend for persistence
-      const apiUrl = getApiUrl()
-      axios.post(
-        `${apiUrl}/onboarding/${employee?.id}/w4-form`,
-        {
-          form_data: formData,
-          signed: true,
-          signature_data: signatureData.signature,
-          completed_at: new Date().toISOString()
-        }
-      ).catch(err => {
-        console.error('Failed to save W-4 to backend:', err)
-        // Continue even if backend save fails
-      })
-      
-    } catch (error) {
-      console.error('Failed to generate W-4 PDF:', error)
-      
-      // Fallback to backend generation
+
+      // Step 2: Overlay signature on EXISTING PDF (like I-9 does)
+      console.log('🖊️ Adding signature overlay to existing W-4 PDF...')
+      let signedPdfBase64: string
       try {
-        const apiUrl = getApiUrl()
-        const response = await axios.post(
-          `${apiUrl}/onboarding/${employee?.id}/w4-form/generate-pdf`,
-          {
-            employee_data: {
-              ...formData,
-              signatureData
+        signedPdfBase64 = await addSignatureToExistingW4Pdf(basePdf, signatureData)
+        setPdfUrl(signedPdfBase64)
+        setRemotePdfUrl(null)  // Clear remote reference during signing
+        setDocumentMetadata(null)
+        console.log('✅ Signature overlay complete, PDF length:', signedPdfBase64.length)
+      } catch (error) {
+        console.error('❌ Failed to overlay signature onto W-4 PDF:', error)
+        setMetadataError('Failed to add signature to W-4 PDF')
+        return
+      }
+
+      // Step 3: Upload signed PDF to backend for storage (don't regenerate!)
+      let remotePdfUrl: string | null = null
+      let documentMetadata: StepDocumentMetadata | null = null
+      let inlinePdfData: string = signedPdfBase64
+
+      if (employee?.id && !employee.id.startsWith('demo-')) {
+        try {
+          console.log('☁️ Uploading signed W-4 PDF to backend storage...')
+          const apiUrl = getApiUrl()
+          const response = await axios.post(
+            `${apiUrl}/onboarding/${employee.id}/w4-form/store-signed-pdf`,
+            {
+              pdfBase64: signedPdfBase64,  // Send the signed PDF
+              signature_data: {
+                ...signatureData,
+                signedAt: signatureData.signedAt || new Date().toISOString()
+              },
+              form_data: formData  // For metadata only
+            }
+          )
+
+          if (response?.data?.success && response.data.data) {
+            const payload = response.data.data
+            if (payload.pdf_url) {
+              remotePdfUrl = payload.pdf_url
+              setRemotePdfUrl(payload.pdf_url)
+              console.log('✅ Signed W-4 stored in Supabase:', payload.pdf_url)
+            }
+            if (payload.document_metadata) {
+              documentMetadata = payload.document_metadata as StepDocumentMetadata
+              setDocumentMetadata(documentMetadata)
+              setHasStoredDocument(true)
+            }
+            if (payload.pdf) {
+              inlinePdfData = payload.pdf
+              setPdfUrl(payload.pdf)
             }
           }
-        )
-        
-        if (response.data?.data?.pdf) {
-          setPdfUrl(response.data.data.pdf)
-          
-          // Update session storage with PDF URL
-          const updatedData = {
-            ...completeData,
-            showReview: true,
-            pdfUrl: response.data.data.pdf
-          }
-          sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(updatedData))
-          sessionStorage.setItem('onboarding_w4-form_data', JSON.stringify(updatedData))
+        } catch (uploadError) {
+          console.error('❌ Failed to upload signed W-4 PDF:', uploadError)
+          console.warn('⚠️ W-4 PDF signed locally, but storage failed')
+          setMetadataError('PDF signed locally, not stored in cloud')
+          setHasStoredDocument(false)
         }
-      } catch (backendError) {
-        console.error('Backend PDF generation also failed:', backendError)
       }
+
+      // Step 4: Save complete data to session and backend
+      const completedAt = new Date().toISOString()
+      const completeData = {
+        formData,
+        signed: true,
+        isSigned: true,
+        signatureData,
+        completedAt,
+        pdfGenerated: true,
+        pdfGeneratedAt: completedAt,
+        remotePdfUrl,
+        documentMetadata,
+        inlinePdfData,
+        showReview: true
+      }
+
+      // Save to session storage
+      sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(completeData))
+      sessionStorage.setItem('onboarding_w4-form_data', JSON.stringify(completeData))
+
+      // Save to backend database
+      await saveProgress(currentStep.id, completeData)
+      await markStepComplete(currentStep.id, completeData)
+
+      // Also save form data to backend
+      if (employee?.id && !employee.id.startsWith('demo-')) {
+        try {
+          const apiUrl = getApiUrl()
+          await axios.post(
+            `${apiUrl}/onboarding/${employee.id}/w4-form`,
+            {
+              formData: formData,
+              signed: true,
+              signatureData: signatureData,
+              completedAt: completedAt
+            }
+          )
+          console.log('✅ W-4 form data saved to backend database')
+        } catch (err) {
+          console.error('⚠️ Failed to save W-4 to backend database:', err)
+          // Don't block on database save failure
+        }
+      }
+
+      console.log('🎉 W-4 signing complete - TWO previews workflow successful')
+
+    } catch (error) {
+      console.error('❌ W-4 signing process failed:', error)
+      setMetadataError('Failed to complete W-4 signing')
+    } finally {
+      // Always clear signing flag, even if errors occurred
+      setIsSigningInProgress(false)
     }
   }
-
 
   const translations: Record<'en' | 'es', W4Translations> = {
     en: {
@@ -427,8 +664,61 @@ export default function W4FormStep({
 
   const t = translations[language]
 
+  const renderMissingDocumentNotice = () => {
+    if (!isSigned) return null
+
+    if (!hasStoredDocument && metadataError) {
+      return (
+        <Alert className="bg-amber-50 border-amber-200">
+          <AlertCircle className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800">
+            <div className="space-y-2">
+              <p>{language === 'es' ? 'No pudimos encontrar su W-4 firmado en el almacenamiento. Por favor repita este paso.' : 'We could not find your signed W-4 in storage. Please redo this step.'}</p>
+              <button
+                onClick={handleResetW4}
+                className="text-sm text-amber-700 underline hover:text-amber-800 font-medium"
+              >
+                {language === 'es' ? 'Reiniciar el W-4' : 'Restart W-4'}
+              </button>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )
+    }
+
+    return null
+  }
+
+  const handleResetW4 = () => {
+    setFormData({})
+    setShowReview(false)
+    setIsSigned(false)
+    setPdfUrl(null)
+    setRemotePdfUrl(null)
+    setDocumentMetadata(null)
+    setMetadataError(null)
+    setHasStoredDocument(false)
+    sessionStorage.removeItem(`onboarding_${currentStep.id}_data`)
+    sessionStorage.removeItem('onboarding_w4-form_data')
+  }
+
+  const renderLoadingIndicator = () => {
+    if (!metadataLoading) return null
+
+    return (
+      <Alert className="bg-blue-50 border-blue-200">
+        <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+        <AlertDescription className="text-blue-800 text-sm">
+          {language === 'es' ? 'Verificando los documentos almacenados del W-4...' : 'Checking stored W-4 documents...'}
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  const hasPreviewSource = Boolean(pdfUrl || remotePdfUrl || documentMetadata?.signed_url)
+
   return (
-    <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus}>
+    <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus} canProceed={isSigned}>
       <StepContentWrapper>
         <div className="space-y-6">
         {/* Step Header */}
@@ -440,44 +730,12 @@ export default function W4FormStep({
           <p className="text-gray-600 max-w-3xl mx-auto">{t.description}</p>
         </div>
 
-        {/* W-4 Dependent Calculations Helper */}
-        {complianceValidation.w4Calculations && (
-          <ComplianceAlert
-            severity="info"
-            title={language === 'es' ? 'Cálculo de Créditos por Dependientes' : 'Dependent Credits Calculation'}
-            messages={[
-              complianceValidation.w4Calculations.explanation,
-              language === 'es'
-                ? `Crédito total calculado: $${complianceValidation.w4Calculations.totalCredit}`
-                : `Total calculated credit: $${complianceValidation.w4Calculations.totalCredit}`
-            ]}
-            dismissible={true}
-            regulationLink={{
-              text: language === 'es' ? 'Calculadora del IRS' : 'IRS Calculator',
-              url: 'https://www.irs.gov/individuals/tax-withholding-estimator'
-            }}
-          />
-        )}
-
-        {/* W-4 Validation Warnings */}
-        {complianceValidation.w4Validation && complianceValidation.w4Validation.warnings.length > 0 && (
-          <ComplianceAlert
-            severity="warning"
-            title={language === 'es' ? 'Advertencias del W-4' : 'W-4 Warnings'}
-            messages={complianceValidation.w4Validation.warnings}
-            dismissible={true}
-          />
-        )}
-
-        {/* W-4 Validation Errors */}
-        {complianceValidation.w4Validation && !complianceValidation.w4Validation.isValid && (
-          <ComplianceAlert
-            severity="error"
-            title={language === 'es' ? 'Errores en el W-4' : 'W-4 Errors'}
-            messages={complianceValidation.w4Validation.errors}
-            dismissible={false}
-          />
-        )}
+        {/* Compliance validation alerts commented out - hook doesn't exist yet */}
+        {/* complianceValidation.w4Calculations && (
+          <ComplianceAlert ... />
+        ) */}
+        {/* complianceValidation.w4Validation warnings ... */}
+        {/* complianceValidation.w4Validation errors ... */}
 
         {/* Federal Compliance Notice */}
         <Alert className="bg-blue-50 border-blue-200">
@@ -496,6 +754,8 @@ export default function W4FormStep({
             </AlertDescription>
           </Alert>
         )}
+
+        {renderLoadingIndicator()}
 
         {/* Auto-fill Notification */}
         {autoFillNotification && (
@@ -525,8 +785,7 @@ export default function W4FormStep({
         </Card>
 
         {/* Show Form, Review, or Signed PDF */}
-        {isSigned && pdfUrl ? (
-          // Show PDF preview for already signed forms
+        {isSigned && hasPreviewSource ? (
           <div className="space-y-6">
             <Alert className="bg-green-50 border-green-200">
               <CheckCircle className="h-4 w-4 text-green-600" />
@@ -534,7 +793,9 @@ export default function W4FormStep({
                 {t.completionMessage}
               </AlertDescription>
             </Alert>
-            
+
+            {renderMissingDocumentNotice()}
+
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center space-x-2">
@@ -543,14 +804,18 @@ export default function W4FormStep({
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <PDFViewer pdfData={pdfUrl} height="600px" />
+                <PDFViewer
+                  pdfUrl={remotePdfUrl || documentMetadata?.signed_url || undefined}
+                  pdfData={!remotePdfUrl && !documentMetadata?.signed_url ? pdfUrl ?? undefined : undefined}
+                  height="600px"
+                />
               </CardContent>
             </Card>
           </div>
         ) : !showReview ? (
           <FormSection
-            title={String(t.title || 'W-4 Tax Withholding')}
-            description={String(t.description || '')}
+            title={t.title || 'W-4 Tax Withholding'}
+            description={t.description || ''}
             icon={<FileText />}
             completed={isSigned}
             required={true}
@@ -568,6 +833,7 @@ export default function W4FormStep({
                   language={language}
                   employeeId={employee?.id}
                   onComplete={handleFormComplete}
+                  isLocked={isSigned || !!documentMetadata?.signed_url}
                 />
               </CardContent>
             </Card>
@@ -580,9 +846,11 @@ export default function W4FormStep({
             description={t.reviewDescription}
             language={language}
             onSign={handleSign}
-            onBack={() => setShowReview(false)}
+            onBack={() => {
+              setShowReview(false)
+              setPdfUrl(null) // Clear PDF so it regenerates when returning to review
+            }}
             usePDFPreview={true}
-            pdfEndpoint={`${getApiUrl()}/onboarding/${employee?.id}/w4-form/generate-pdf`}
             pdfUrl={pdfUrl}
             federalCompliance={{
               formName: 'Form W-4, Employee\'s Withholding Certificate',
@@ -593,6 +861,19 @@ export default function W4FormStep({
           />
         )}
         </div>
+
+        {/* Navigation */}
+        <NavigationButtons
+          showPrevious={true}
+          showNext={true}
+          onPrevious={goToPreviousStep || (() => {})}
+          onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+          disabled={saveStatus?.saving || !isSigned}
+          saving={saveStatus?.saving}
+          hasErrors={false}
+          language={language}
+          nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+        />
       </StepContentWrapper>
     </StepContainer>
   )

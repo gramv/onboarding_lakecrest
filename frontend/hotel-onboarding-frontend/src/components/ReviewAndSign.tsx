@@ -513,9 +513,9 @@ export default function ReviewAndSign({
             <SignatureCanvas
               ref={signatureRef}
               canvasProps={{
-                className: 'w-full h-48 bg-white'
+                className: 'w-full h-48'
               }}
-              backgroundColor="white"
+              backgroundColor="rgba(0,0,0,0)"
               penColor="black"
             />
           </div>

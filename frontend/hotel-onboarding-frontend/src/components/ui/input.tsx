@@ -42,7 +42,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             id={inputId}
             type={type}
             className={cn(
-              "form-input-enhanced",
+              "form-input-enhanced min-h-[48px]",
               error && "error",
               success && "success",
               className
@@ -73,7 +73,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
             type={type}
             placeholder=" "
             className={cn(
-              "form-input-enhanced peer",
+              "form-input-enhanced peer min-h-[48px]",
               error && "error",
               success && "success",
               className
@@ -117,7 +117,7 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           id={inputId}
           type={type}
           className={cn(
-            "flex h-11 w-full rounded-lg border-2 border-hotel-neutral-300 bg-white px-4 py-3 text-base shadow-sm transition-all duration-200 ease-in-out file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-hotel-neutral-900 placeholder:text-hotel-neutral-500 hover:border-hotel-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hotel-primary/20 focus-visible:border-hotel-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-hotel-neutral-50 dark:border-hotel-neutral-700 dark:bg-hotel-neutral-900 dark:file:text-hotel-neutral-50 dark:placeholder:text-hotel-neutral-400 dark:focus-visible:ring-hotel-primary/20",
+            "flex h-11 min-h-[48px] w-full rounded-lg border-2 border-hotel-neutral-300 bg-white px-4 py-3 text-base shadow-sm transition-all duration-200 ease-in-out file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-hotel-neutral-900 placeholder:text-hotel-neutral-500 hover:border-hotel-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-hotel-primary/20 focus-visible:border-hotel-primary disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-hotel-neutral-50 dark:border-hotel-neutral-700 dark:bg-hotel-neutral-900 dark:file:text-hotel-neutral-50 dark:placeholder:text-hotel-neutral-400 dark:focus-visible:ring-hotel-primary/20",
             error && "border-red-400 focus-visible:border-red-500 focus-visible:ring-red-500/20",
             success && "border-green-400 focus-visible:border-green-500 focus-visible:ring-green-500/20",
             className

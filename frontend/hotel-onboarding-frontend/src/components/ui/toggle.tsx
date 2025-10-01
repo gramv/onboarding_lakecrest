@@ -16,9 +16,9 @@ const toggleVariants = cva(
           "border border-zinc-200 bg-transparent shadow-sm hover:bg-zinc-100 hover:text-zinc-900 dark:border-zinc-800 dark:hover:bg-zinc-800 dark:hover:text-zinc-50",
       },
       size: {
-        default: "h-9 px-2 min-w-9",
-        sm: "h-8 px-1.5 min-w-8",
-        lg: "h-10 px-2.5 min-w-10",
+        default: "h-9 min-h-[48px] px-3 min-w-[48px]",
+        sm: "h-8 min-h-[48px] px-2 min-w-[48px]",
+        lg: "h-10 min-h-[48px] px-4 min-w-[48px]",
       },
     },
     defaultVariants: {

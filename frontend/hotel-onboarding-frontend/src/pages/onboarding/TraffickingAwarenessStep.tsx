@@ -6,6 +6,7 @@ import { CheckCircle, GraduationCap, Shield, AlertTriangle } from 'lucide-react'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 import { useAutoSave } from '@/hooks/useAutoSave'
 
 export default function TraffickingAwarenessStep({
@@ -13,9 +14,12 @@ export default function TraffickingAwarenessStep({
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   const [trainingComplete, setTrainingComplete] = useState(false)
@@ -76,6 +80,7 @@ export default function TraffickingAwarenessStep({
 
   const t = translations[language]
 
+
   return (
     <StepContainer saveStatus={saveStatus}>
       <StepContentWrapper>
@@ -127,6 +132,20 @@ export default function TraffickingAwarenessStep({
         <div className="text-center text-sm text-gray-500">
           <p>{t.estimatedTime}</p>
         </div>
+
+        {/* Navigation */}
+        <NavigationButtons
+          showPrevious={true}
+          showNext={true}
+          onPrevious={goToPreviousStep || (() => {})}
+          onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+          disabled={saveStatus?.saving || !trainingComplete}
+          saving={saveStatus?.saving}
+          hasErrors={false}
+          language={language}
+          nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+        />
+
         </div>
       </StepContentWrapper>
     </StepContainer>

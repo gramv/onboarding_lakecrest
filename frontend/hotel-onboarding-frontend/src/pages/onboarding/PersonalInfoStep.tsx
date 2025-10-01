@@ -1,11 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import PersonalInformationForm from '@/components/PersonalInformationForm'
 import EmergencyContactsForm from '@/components/EmergencyContactsForm'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Breadcrumb, createBreadcrumbItems } from '@/components/ui/breadcrumb'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
-import { CheckCircle, User, Phone } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { CheckCircle, User, Phone, ArrowRight } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { useAutoSave } from '@/hooks/useAutoSave'
@@ -27,6 +29,7 @@ export default function PersonalInfoStep({
   const [emergencyContactsValid, setEmergencyContactsValid] = useState(false)
   const [activeTab, setActiveTab] = useState('personal')
   const [dataLoaded, setDataLoaded] = useState(false)
+  const tabOverrideRef = useRef(false)
   
   // Combine form data for saving
   const formData = {
@@ -118,7 +121,7 @@ export default function PersonalInfoStep({
             })
           }
           
-          if (dataToUse.activeTab) {
+          if (dataToUse.activeTab && !tabOverrideRef.current) {
             setActiveTab(dataToUse.activeTab)
           }
         }
@@ -141,9 +144,20 @@ export default function PersonalInfoStep({
   // Check completion status
   const isStepComplete = personalInfoValid && emergencyContactsValid
 
+  // Debug logging for step completion
+  useEffect(() => {
+    console.log('📋 PersonalInfoStep: Validation status:', {
+      personalInfoValid,
+      emergencyContactsValid,
+      isStepComplete,
+      isAlreadyCompleted: progress.completedSteps.includes(currentStep.id)
+    })
+  }, [personalInfoValid, emergencyContactsValid, isStepComplete, progress.completedSteps, currentStep.id])
+
   // Auto-mark complete when both forms are valid
   useEffect(() => {
     if (isStepComplete && !progress.completedSteps.includes(currentStep.id)) {
+      console.log('🎯 PersonalInfoStep: Auto-completing step...')
       markStepComplete(currentStep.id, formData)
     }
   }, [isStepComplete, currentStep.id, formData, markStepComplete, progress.completedSteps])
@@ -183,24 +197,15 @@ export default function PersonalInfoStep({
   const handleEmergencyContactsValidationChange = useCallback((isValid: boolean) => {
     setEmergencyContactsValid(isValid)
   }, [])
-
-  // Handle Continue button for Personal Details section
-  const handlePersonalDetailsContinue = useCallback(() => {
-    if (personalInfoValid) {
-      setActiveTab('emergency')
-      scrollToTop()
-      // Update session storage
-      const updatedFormData = {
-        personalInfo: personalInfoData,
-        emergencyContacts: emergencyContactsData,
-        activeTab: 'emergency'
-      }
-      sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(updatedFormData))
-    }
-  }, [personalInfoValid, personalInfoData, emergencyContactsData, currentStep.id])
-
+ 
+  const unlocksEmergencyTab = personalInfoValid || progress.completedSteps.includes(currentStep.id)
+  const allSectionsComplete = personalInfoValid && emergencyContactsValid
   // Enhanced tab change handler
   const handleTabChange = useCallback((newTab: string) => {
+    if (newTab === 'emergency' && !unlocksEmergencyTab) {
+      return
+    }
+    tabOverrideRef.current = true
     setActiveTab(newTab)
     scrollToTop()
     // Save tab state
@@ -210,7 +215,7 @@ export default function PersonalInfoStep({
       activeTab: newTab
     }
     sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(updatedFormData))
-  }, [personalInfoData, emergencyContactsData, currentStep.id])
+  }, [personalInfoData, emergencyContactsData, currentStep.id, unlocksEmergencyTab])
 
   const translations = {
     en: {
@@ -249,20 +254,25 @@ export default function PersonalInfoStep({
       id: 'personal',
       label: t.personalTab,
       icon: <User className="h-4 w-4" />,
-      enabled: true,
+      disabled: false,
       complete: personalInfoValid
     },
     {
       id: 'emergency',
       label: t.emergencyTab,
       icon: <Phone className="h-4 w-4" />,
-      enabled: true, // Always enabled, but continue button requires personal details
+      disabled: !unlocksEmergencyTab,
       complete: emergencyContactsValid
     }
   ]
 
   return (
-    <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus}>
+    <StepContainer
+      errors={errors}
+      fieldErrors={fieldErrors}
+      saveStatus={saveStatus}
+      canProceed={isStepComplete}
+    >
       <StepContentWrapper>
         <div className="space-y-6">
         {/* Breadcrumb Navigation */}
@@ -280,15 +290,49 @@ export default function PersonalInfoStep({
           <p className="text-gray-600 max-w-2xl mx-auto">{t.description}</p>
         </div>
 
-        {/* Completion Alert */}
-        {isStepComplete && (
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              {t.completionMessage}
-            </AlertDescription>
-          </Alert>
-        )}
+        {/* Section Summary */}
+        <div className="grid gap-3 sm:grid-cols-2">
+          {[
+            {
+              id: 'personal',
+              label: t.personalTab,
+              complete: personalInfoValid,
+              description: personalInfoValid
+                ? 'Personal details confirmed'
+                : t.fillPersonalFirst
+            },
+            {
+              id: 'emergency',
+              label: t.emergencyTab,
+              complete: emergencyContactsValid,
+              description: emergencyContactsValid
+                ? 'Emergency contacts ready'
+                : 'Provide at least one emergency contact'
+            }
+          ].map(section => (
+            <div
+              key={section.id}
+              className={`flex items-start gap-3 rounded-lg border p-3 ${
+                section.complete ? 'border-green-200 bg-green-50' : 'border-blue-100 bg-blue-50'
+              }`}
+            >
+              <div className="mt-1">
+                {section.complete ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                ) : (
+                  <Badge variant="outline" className="text-[11px]">
+                    {t.required}
+                  </Badge>
+                )}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">{section.label}</p>
+                <p className="text-xs text-gray-600">{section.description}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
 
         {/* Tabbed Interface */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
@@ -297,10 +341,10 @@ export default function PersonalInfoStep({
               <TabsTrigger 
                 key={tab.id}
                 value={tab.id}
-                disabled={!tab.enabled}
+                disabled={tab.disabled}
                 className="flex items-center space-x-2"
               >
-                {tab.icon}
+                {tab.icon && tab.icon}
                 <span className="hidden sm:inline">{tab.label}</span>
                 {tab.complete && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
               </TabsTrigger>
@@ -315,31 +359,24 @@ export default function PersonalInfoStep({
                   initialData={personalInfoData}
                   language={language}
                   onSave={handlePersonalInfoSave}
-                  onNext={handlePersonalDetailsContinue}
                   onValidationChange={handlePersonalInfoValidationChange}
-                  useMainNavigation={false}
+                  useMainNavigation
                 />
-                
-                {/* Continue Button */}
-                <div className="flex justify-end pt-6 border-t">
-                  <button
-                    onClick={handlePersonalDetailsContinue}
-                    disabled={!personalInfoValid}
-                    className={`px-6 py-3 rounded-lg font-medium transition-colors ${
-                      personalInfoValid
-                        ? 'bg-blue-600 text-white hover:bg-blue-700'
-                        : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                    }`}
-                  >
-                    {t.continueToEmergency} →
-                  </button>
-                </div>
-                
-                {!personalInfoValid && (
-                  <p className="text-sm text-amber-600 text-center">
-                    {t.fillPersonalFirst}
-                  </p>
+
+                {/* Go to Emergency Contacts Button */}
+                {personalInfoValid && (
+                  <div className="flex justify-center">
+                    <Button
+                      onClick={() => handleTabChange('emergency')}
+                      className="w-full sm:w-auto min-h-[44px] px-6"
+                      variant="default"
+                    >
+                      {t.continueToEmergency}
+                      <ArrowRight className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
+
               </>
             )}
           </TabsContent>
@@ -347,97 +384,31 @@ export default function PersonalInfoStep({
           <TabsContent value="emergency" className="space-y-6">
             {dataLoaded && (
               <>
+                {/* Back to Personal Details Button */}
+                <div className="flex justify-start">
+                  <Button
+                    onClick={() => handleTabChange('personal')}
+                    className="min-h-[44px]"
+                    variant="outline"
+                  >
+                    {t.backToPersonal}
+                  </Button>
+                </div>
+
                 <EmergencyContactsForm
                   key="emergency-form"
                   initialData={emergencyContactsData}
                   language={language}
                   onSave={handleEmergencyContactsSave}
-                  onNext={() => {}} // Portal handles navigation
-                  onBack={() => handleTabChange('personal')}
                   onValidationChange={handleEmergencyContactsValidationChange}
-                  useMainNavigation={true}
+                  useMainNavigation
                 />
-                
-                {/* Navigation Buttons */}
-                <div className="flex justify-between pt-6 border-t">
-                  <button
-                    onClick={() => handleTabChange('personal')}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                  >
-                    {t.backToPersonal}
-                  </button>
-                  
-                  {emergencyContactsValid && (
-                    <div className="flex items-center space-x-2 text-green-600">
-                      <CheckCircle className="h-5 w-5" />
-                      <span className="font-medium">{t.complete}</span>
-                    </div>
-                  )}
-                </div>
               </>
             )}
           </TabsContent>
         </Tabs>
 
-        {/* Progress Summary */}
-        <div className="bg-gray-50 rounded-lg p-4">
-          <h3 className="font-medium text-gray-900 mb-3">{t.sectionProgress}</h3>
-          <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">{t.personalTab}</span>
-              <div className="flex items-center space-x-2">
-                {personalInfoValid ? (
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                ) : (
-                  <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
-                )}
-                <span className="text-sm font-medium">
-                  {personalInfoValid ? t.complete : t.required}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-sm text-gray-600">{t.emergencyTab}</span>
-              <div className="flex items-center space-x-2">
-                {emergencyContactsValid ? (
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                ) : (
-                  <div className="h-4 w-4 rounded-full border-2 border-gray-300" />
-                )}
-                <span className="text-sm font-medium">
-                  {emergencyContactsValid ? t.complete : t.required}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
 
-        {/* Debug section - temporary */}
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 p-4 bg-gray-100 rounded">
-            <button 
-              onClick={() => {
-                const data = sessionStorage.getItem(`onboarding_${currentStep.id}_data`)
-                console.log('Session storage data:', data)
-                if (data) {
-                  const parsed = JSON.parse(data)
-                  console.log('Parsed data structure:', parsed)
-                  console.log('Personal info valid:', personalInfoValid)
-                  console.log('Emergency contacts valid:', emergencyContactsValid)
-                  console.log('Is step complete:', isStepComplete)
-                }
-              }}
-              className="bg-blue-500 text-white px-4 py-2 rounded text-sm mr-2"
-            >
-              Debug: Check Session Storage
-            </button>
-            <span className="text-sm text-gray-600">
-              Personal: {personalInfoValid ? '✓' : '✗'} | 
-              Emergency: {emergencyContactsValid ? '✓' : '✗'} | 
-              Complete: {isStepComplete ? '✓' : '✗'}
-            </span>
-          </div>
-        )}
         </div>
       </StepContentWrapper>
     </StepContainer>

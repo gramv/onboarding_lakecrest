@@ -4,14 +4,20 @@
  */
 
 import axios, { AxiosInstance, AxiosRequestConfig } from 'axios'
+import { getApiUrl, API_TIMEOUT, validateApiConfiguration } from '../config/api'
 
-// API base URL - uses Vite proxy in development
-const API_BASE_URL = import.meta.env.VITE_API_URL || '/api'
+// Validate configuration on module load (development only)
+if (import.meta.env.MODE === 'development') {
+  validateApiConfiguration()
+}
+
+// API base URL - uses centralized configuration
+const API_BASE_URL = getApiUrl()
 
 // Create axios instance with default config
 const apiClient: AxiosInstance = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 30000,
+  timeout: API_TIMEOUT,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -69,6 +75,7 @@ apiClient.interceptors.response.use(
 )
 
 // API endpoints organized by feature
+// Note: Base URL already includes /api prefix, so endpoints should not duplicate it
 export const api = {
   // Authentication
   auth: {
@@ -77,14 +84,12 @@ export const api = {
     logout: () => apiClient.post('/auth/logout'),
     me: () => apiClient.get('/auth/me'),
     refreshToken: () => apiClient.post('/auth/refresh'),
-    changePassword: (payload: { current_password: string; new_password: string }) =>
-      apiClient.post('/auth/change-password', payload),
+    changePassword: (data: { current_password: string; new_password: string }) =>
+      apiClient.post('/auth/change-password', data),
     requestPasswordReset: (email: string) =>
       apiClient.post('/auth/request-password-reset', { email }),
-    verifyResetToken: (token: string) =>
-      apiClient.get('/auth/verify-reset-token', { params: { token } }),
-    resetPassword: (payload: { token: string; password: string }) =>
-      apiClient.post('/auth/reset-password', payload),
+    resetPassword: (token: string, newPassword: string) =>
+      apiClient.post('/auth/reset-password', { token, new_password: newPassword }),
   },
 
   // HR Dashboard
@@ -116,6 +121,7 @@ export const api = {
       })
     },
     deleteProperty: (id: string) => apiClient.delete(`/hr/properties/${id}`),
+    getPropertyStats: (propertyId: string) => apiClient.get(`/hr/properties/${propertyId}/stats`),
     getManagers: (params?: { include_inactive?: boolean }) => 
       apiClient.get('/hr/managers', { params }),
     createManager: (data: any) => {
@@ -169,24 +175,33 @@ export const api = {
   // Manager Dashboard
   manager: {
     getDashboardStats: () => apiClient.get('/manager/dashboard-stats'),
-    getProperty: () => apiClient.get('/manager/property'),
     getMyProperty: () => apiClient.get('/manager/property'),
     getMyEmployees: () => apiClient.get('/manager/employees'),
     getApplications: () => apiClient.get('/manager/applications'),
     approveApplication: (id: string) => apiClient.post(`/manager/applications/${id}/approve`),
     rejectApplication: (id: string) => apiClient.post(`/manager/applications/${id}/reject`),
+
+    // Notification Preferences
+    getNotificationPreferences: () =>
+      apiClient.get('/manager/notification-preferences'),
+    updateNotificationPreferences: (preferences: any) =>
+      apiClient.put('/manager/notification-preferences', preferences),
+
+    // Email Recipients
+    getEmailRecipients: () =>
+      apiClient.get('/manager/email-recipients'),
+    addEmailRecipient: (data: { email: string; name?: string }) =>
+      apiClient.post('/manager/email-recipients', data),
+    updateEmailRecipient: (id: string, updates: any) =>
+      apiClient.put(`/manager/email-recipients/${id}`, updates),
+    deleteEmailRecipient: (id: string) =>
+      apiClient.delete(`/manager/email-recipients/${id}`),
+
+    // Property management
+    getProperty: () => apiClient.get('/manager/property'),
     getProperties: () => apiClient.get('/manager/properties'),
     regenerateQR: (propertyId: string) =>
-      apiClient.post(`/manager/properties/${propertyId}/qr-code`, {}),
-    getEmailRecipients: () => apiClient.get('/manager/email-recipients'),
-    addEmailRecipient: (payload: { email: string; name?: string }) =>
-      apiClient.post('/manager/email-recipients', payload),
-    updateEmailRecipient: (id: string, payload: { name?: string; is_active?: boolean; receives_applications?: boolean }) =>
-      apiClient.put(`/manager/email-recipients/${id}`, payload),
-    deleteEmailRecipient: (id: string) => apiClient.delete(`/manager/email-recipients/${id}`),
-    getNotificationPreferences: () => apiClient.get('/manager/notification-preferences'),
-    updateNotificationPreferences: (prefs: { applications?: boolean; approvals?: boolean; reminders?: boolean }) =>
-      apiClient.put('/manager/notification-preferences', prefs),
+      apiClient.post(`/manager/properties/${propertyId}/qr-code`),
   },
 
   // Employee Onboarding
@@ -225,6 +240,7 @@ export const api = {
   // Job Applications
   applications: {
     submit: (data: any) => apiClient.post('/applications/submit', data),
+    submitToProperty: (propertyId: string, data: any) => apiClient.post(`/apply/${propertyId}`, data),
     getByProperty: (propertyId: string) => apiClient.get(`/applications/property/${propertyId}`),
     getById: (id: string) => apiClient.get(`/applications/${id}`),
     updateStatus: (id: string, status: string) =>
@@ -235,6 +251,7 @@ export const api = {
   properties: {
     getPublic: () => apiClient.get('/properties/public'),
     getById: (id: string) => apiClient.get(`/properties/${id}`),
+    getInfo: (id: string) => apiClient.get(`/properties/${id}/info`),
   },
 
   // Document Processing
@@ -254,6 +271,29 @@ export const api = {
   // WebSocket connection info
   websocket: {
     getConnectionInfo: () => apiClient.get('/ws/connection-info'),
+  },
+
+  // Notifications
+  notifications: {
+    getCount: () => apiClient.get('/notifications/count'),
+    getAll: () => apiClient.get('/notifications'),
+    markAsRead: (id: string) => apiClient.put(`/notifications/${id}/read`),
+    markAllAsRead: () => apiClient.put('/notifications/read-all'),
+
+    // Preferences
+    getPreferences: () => apiClient.get('/notifications/preferences'),
+    updatePreferences: (preferences: any) => apiClient.put('/notifications/preferences', preferences),
+  },
+
+  // Email Recipients Management (separate from user accounts)
+  emailRecipients: {
+    getRecipients: (propertyId: string) => apiClient.get(`/manager/email-recipients/${propertyId}`),
+    addRecipient: (propertyId: string, data: { email: string; name: string; type?: string }) =>
+      apiClient.post(`/manager/email-recipients/${propertyId}`, data),
+    removeRecipient: (propertyId: string, recipientId: string) =>
+      apiClient.delete(`/manager/email-recipients/${propertyId}/${recipientId}`),
+    updateRecipient: (propertyId: string, recipientId: string, data: { email?: string; name?: string; is_active?: boolean }) =>
+      apiClient.put(`/manager/email-recipients/${propertyId}/${recipientId}`, data),
   },
 }
 

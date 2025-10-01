@@ -96,7 +96,7 @@ export default function I9ReviewSignStep(props) {
   // Check if required I-9 Section 1 data exists
   if (!section1Data) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 pb-32">
         <div className="text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <AlertTriangle className="h-6 w-6 text-red-600" />
@@ -124,7 +124,7 @@ export default function I9ReviewSignStep(props) {
   // Show signature capture if PDF has been reviewed
   if (showSignature) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 pb-32">
         <div className="text-center mb-6">
           <Shield className="h-12 w-12 text-green-600 mx-auto mb-3" />
           <h2 className="text-2xl font-bold text-gray-900">{t.signatureTitle}</h2>
@@ -151,7 +151,7 @@ export default function I9ReviewSignStep(props) {
   // Show PDF review if form data is complete
   if (showPDFReview) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-6 pb-32">
         <div className="text-center">
           <div className="flex items-center justify-center space-x-2 mb-4">
             <Eye className="h-6 w-6 text-blue-600" />
@@ -177,7 +177,7 @@ export default function I9ReviewSignStep(props) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32">
       {/* Step Header */}
       <div className="text-center">
         <div className="flex items-center justify-center space-x-2 mb-4">

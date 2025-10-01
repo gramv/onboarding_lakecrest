@@ -12,12 +12,16 @@ export interface OnboardingStep {
   governmentRequired?: boolean
 }
 
+export type StepStatus = 'locked' | 'ready' | 'in-progress' | 'complete'
+
 export interface OnboardingProgress {
   currentStepIndex: number
+  currentStepId?: string
   totalSteps: number
   completedSteps: string[]
   percentComplete: number
   canProceed: boolean
+  stepStates?: Record<string, StepStatus>
   formData?: { [stepId: string]: any }
 }
 

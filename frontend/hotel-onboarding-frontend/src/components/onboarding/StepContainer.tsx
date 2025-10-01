@@ -9,6 +9,7 @@ interface StepContainerProps {
   fieldErrors?: Record<string, string>
   saveStatus?: SaveStatus
   className?: string
+  canProceed?: boolean
 }
 
 /**
@@ -19,27 +20,36 @@ export function StepContainer({
   errors = [],
   fieldErrors = {},
   saveStatus = 'idle',
-  className = ''
+  className = '',
+  canProceed = true
 }: StepContainerProps) {
   // Collect all field errors into a single array
   const allFieldErrors = Object.values(fieldErrors).filter(Boolean)
   const hasErrors = errors.length > 0 || allFieldErrors.length > 0
 
   return (
-    <div className={`space-y-6 ${className}`}>
+    <div className={`space-y-6 pb-24 sm:pb-0 ${className}`}>
       {/* Top-level errors */}
       {errors.length > 0 && (
         <FormError errors={errors} variant="alert" />
       )}
 
       {/* Main content */}
-      <div className="relative">
+      <div
+        className="relative"
+        data-step-container="true"
+        data-can-proceed={canProceed}
+        role="group"
+      >
         {children}
-        
+
         {/* Auto-save indicator */}
         {saveStatus !== 'idle' && (
-          <div className="absolute top-0 right-0 -mt-8">
-            <AutoSaveIndicator status={saveStatus} />
+          <div className="mt-4 flex justify-end sm:mt-0 sm:absolute sm:top-0 sm:right-0 sm:-mt-8">
+            <AutoSaveIndicator
+              status={saveStatus}
+              className="rounded-full bg-white/90 px-3 py-1 text-xs text-gray-600 shadow-sm backdrop-blur sm:bg-transparent sm:px-0 sm:py-0 sm:text-sm sm:shadow-none"
+            />
           </div>
         )}
       </div>

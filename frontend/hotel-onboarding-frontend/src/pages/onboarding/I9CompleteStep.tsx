@@ -13,9 +13,13 @@ import PDFViewer from '@/components/PDFViewer'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useStepValidation } from '@/hooks/useStepValidation'
 import { i9Section1Validator } from '@/utils/stepValidators'
-import { generateCleanI9Pdf } from '@/utils/i9PdfGeneratorClean'
+import { generateCleanI9Pdf, addSignatureToExistingPdf } from '@/utils/i9PdfGeneratorClean'
 import { scrollToTop } from '@/utils/scrollHelpers'
 import axios from 'axios'
+import { getApiUrl } from '@/config/api'
+import { fetchStepDocumentMetadata, persistStepDocument, listStepDocuments, StepDocumentMetadata } from '@/services/documentService'
+import { uploadOnboardingDocument, uploadSignedI9Pdf } from '@/services/onboardingDocuments'
+import { Button } from '@/components/ui/button'
 
 // Helper function to create a simple hash of form data
 const createFormDataHash = (data: any): string => {
@@ -32,10 +36,11 @@ export default function I9CompleteStep({
   progress,
   markStepComplete,
   saveProgress,
-  goToNextStep,
+  advanceToNextStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   // State for tabs
   const [activeTab, setActiveTab] = useState('form')
@@ -50,6 +55,7 @@ export default function I9CompleteStep({
   const [isSigned, setIsSigned] = useState(false)
   const [signatureData, setSignatureData] = useState<any>(null)
   const [signedFormDataHash, setSignedFormDataHash] = useState<string | null>(null)
+  const [isAdvancing, setIsAdvancing] = useState(false)
   
   // State for SSN validation
   const [ssnMismatch, setSsnMismatch] = useState<{hasWarning: boolean, acknowledged: boolean}>({hasWarning: false, acknowledged: false})
@@ -60,7 +66,22 @@ export default function I9CompleteStep({
   // State for PDF
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [isGeneratingPdf, setIsGeneratingPdf] = useState(false)
-  
+  const [remotePdfUrl, setRemotePdfUrl] = useState<string | null>(null)
+  const [documentMetadata, setDocumentMetadata] = useState<StepDocumentMetadata | null>(null)
+  const [metadataLoading, setMetadataLoading] = useState(false)
+  const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [metadataRequested, setMetadataRequested] = useState(false)
+  const [uploadedDocsMetadata, setUploadedDocsMetadata] = useState<any>(null)
+  const [sessionToken, setSessionToken] = useState<string>('')
+
+  // Track which files are missing from Supabase
+  const [missingFiles, setMissingFiles] = useState<{
+    i9Pdf: boolean
+    dlDocument: boolean
+    ssnDocument: boolean
+  }>({ i9Pdf: false, dlDocument: false, ssnDocument: false })
+  const [filesValidated, setFilesValidated] = useState(false)
+
   // Validation hook
   const { errors, fieldErrors, validate } = useStepValidation(i9Section1Validator)
   
@@ -97,11 +118,22 @@ export default function I9CompleteStep({
     onSave: async (data) => {
       console.log('I9CompleteStep - Saving data with citizenship_status:', data.formData?.citizenship_status)
       await saveProgress(currentStep.id, data)
-      // Also save to sessionStorage
-      sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(data))
+      // Also save to sessionStorage with metadata
+      const saveData = {
+        ...data,
+        documentMetadata,
+        remotePdfUrl
+      }
+      sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(saveData))
     }
   })
-  
+
+  // Get session token
+  useEffect(() => {
+    const token = sessionStorage.getItem('hotel_onboarding_token') || ''
+    setSessionToken(token)
+  }, [])
+
   // Load existing data
   useEffect(() => {
     const loadData = async () => {
@@ -126,6 +158,21 @@ export default function I9CompleteStep({
             citizenship_status: dataToUse.formData?.citizenship_status,
             formComplete: dataToUse.formComplete
           })
+
+          // Restore document metadata and remote PDF URL if available
+          if (dataToUse.documentMetadata) {
+            setDocumentMetadata(dataToUse.documentMetadata as StepDocumentMetadata)
+            if (dataToUse.documentMetadata?.signed_url) {
+              setRemotePdfUrl(dataToUse.documentMetadata.signed_url as string)
+              console.log('Restored I-9 PDF URL from metadata:', dataToUse.documentMetadata.signed_url)
+            }
+          }
+
+          // Also check for remotePdfUrl directly saved
+          if (dataToUse.remotePdfUrl) {
+            setRemotePdfUrl(dataToUse.remotePdfUrl as string)
+            console.log('Restored remote I-9 PDF URL:', dataToUse.remotePdfUrl)
+          }
         } catch (e) {
           console.error('Failed to parse saved data:', e)
         }
@@ -134,8 +181,7 @@ export default function I9CompleteStep({
       // ALWAYS check cloud data if we have an employee ID
       if (employee?.id && !employee.id.startsWith('demo-')) {
         try {
-          const apiUrl = import.meta.env.VITE_API_URL || '/api'
-          const response = await fetch(`${apiUrl}/api/onboarding/${employee.id}/i9-complete`)
+          const response = await fetch(`${getApiUrl()}/onboarding/${employee.id}/i9-complete`)
           if (response.ok) {
             const result = await response.json()
             if (result.success && result.data && Object.keys(result.data).length > 0) {
@@ -235,6 +281,185 @@ export default function I9CompleteStep({
     
     loadData()
   }, [currentStep.id, progress.completedSteps, employee])
+
+  // Reset metadata request flag when dependencies change
+  useEffect(() => {
+    setMetadataRequested(false)
+  }, [sessionToken, currentStep.id, employee?.id])
+
+  // Fetch latest I-9 document metadata from backend when available
+  useEffect(() => {
+    if (!sessionToken || !employee?.id) {
+      return
+    }
+
+    // Skip if we've already requested and have the data
+    if (metadataRequested && documentMetadata?.signed_url) {
+      return
+    }
+
+    // Always fetch if step is complete or we don't have the PDF URL yet
+    const shouldFetch = progress.completedSteps.includes(currentStep.id) ||
+                        !remotePdfUrl ||
+                        (isSigned && !documentMetadata?.signed_url)
+
+    if (!shouldFetch) {
+      return
+    }
+
+    let isMounted = true
+    setMetadataRequested(true)
+    setMetadataLoading(true)
+    setMetadataError(null)
+
+    // Use 'i9-section1' as the step ID for fetching I-9 document
+    fetchStepDocumentMetadata(employee.id, 'i9-section1', sessionToken)
+      .then(async response => {
+        if (!isMounted) {
+          return
+        }
+        if (response.document_metadata) {
+          setDocumentMetadata(response.document_metadata)
+          if (response.document_metadata.signed_url) {
+            // Verify the URL is still valid by doing a HEAD request
+            try {
+              const checkResponse = await fetch(response.document_metadata.signed_url, {
+                method: 'HEAD'
+              })
+              if (checkResponse.ok) {
+                setRemotePdfUrl(response.document_metadata.signed_url)
+                console.log('Found existing I-9 document in Supabase:', response.document_metadata.signed_url)
+
+                // If we have a signed document, ensure states are set
+                if (response.has_document) {
+                  setIsSigned(true)
+                  setFormComplete(true)
+                  setSupplementsComplete(true)
+                  setDocumentsComplete(true)
+                }
+              } else {
+                // File was deleted from storage but metadata exists
+                console.log('I-9 document metadata exists but file is missing from storage')
+                setMetadataError('Document file missing from storage')
+                // Clear invalid metadata
+                setDocumentMetadata(null)
+                setRemotePdfUrl(null)
+                // Mark I-9 PDF as missing
+                setMissingFiles(prev => ({ ...prev, i9Pdf: true }))
+                setFilesValidated(true)
+                // Keep signed state but clear the URL to trigger re-sign prompt
+                if (isSigned) {
+                  // This will trigger the re-sign prompt
+                  setIsSigned(true)
+                }
+              }
+            } catch (err) {
+              console.log('Error checking document URL validity:', err)
+              // Clear invalid metadata
+              setDocumentMetadata(null)
+              setRemotePdfUrl(null)
+            }
+          }
+        }
+      })
+      .catch(error => {
+        if (isMounted) {
+          console.log('Document metadata not found or error:', error)
+          // Don't set error if document simply doesn't exist yet
+          if (error instanceof Error && !error.message.includes('404')) {
+            setMetadataError(error.message)
+          }
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setMetadataLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [sessionToken, employee?.id, currentStep.id, progress.completedSteps, metadataRequested, documentMetadata?.signed_url, remotePdfUrl, isSigned])
+
+  // Check for uploaded I-9 documents (DL/SSN) and validate their availability
+  useEffect(() => {
+    const checkUploadedDocuments = async () => {
+      if (!employee?.id || employee.id.startsWith('demo-') || !sessionToken) {
+        return
+      }
+
+      try {
+        const documents = await listStepDocuments(employee.id, 'i9-uploads', sessionToken)
+        setUploadedDocsMetadata(documents)
+        console.log('Found uploaded I-9 documents:', documents.length)
+
+        const hasDL = documents.some(doc =>
+          doc.category === 'dl' || doc.documentType === 'drivers_license'
+        )
+        const hasSSN = documents.some(doc =>
+          doc.category === 'ssn' || doc.documentType === 'social_security_card'
+        )
+
+        if (documents.length === 0) {
+          setMissingFiles(prev => ({
+            ...prev,
+            dlDocument: true,
+            ssnDocument: true
+          }))
+          setFilesValidated(true)
+          return
+        }
+
+        let dlMissing = false
+        let ssnMissing = false
+
+        for (const doc of documents) {
+          if (doc.signed_url) {
+            try {
+              const headResponse = await fetch(doc.signed_url, { method: 'HEAD' })
+              if (!headResponse.ok) {
+                if (doc.category === 'dl' || doc.documentType === 'drivers_license') {
+                  dlMissing = true
+                }
+                if (doc.category === 'ssn' || doc.documentType === 'social_security_card') {
+                  ssnMissing = true
+                }
+              }
+            } catch (error) {
+              if (doc.category === 'dl' || doc.documentType === 'drivers_license') {
+                dlMissing = true
+              }
+              if (doc.category === 'ssn' || doc.documentType === 'social_security_card') {
+                ssnMissing = true
+              }
+            }
+          }
+        }
+
+        if (dlMissing || ssnMissing || !hasDL || !hasSSN) {
+          setMissingFiles(prev => ({
+            ...prev,
+            dlDocument: !hasDL || dlMissing,
+            ssnDocument: !hasSSN || ssnMissing
+          }))
+          setFilesValidated(true)
+        }
+      } catch (error) {
+        console.log('Error checking uploaded I-9 documents:', error)
+        if (documentsComplete) {
+          setMissingFiles(prev => ({
+            ...prev,
+            dlDocument: true,
+            ssnDocument: true
+          }))
+          setFilesValidated(true)
+        }
+      }
+    }
+
+    checkUploadedDocuments()
+  }, [employee?.id, currentStep.id, documentsComplete, sessionToken])
   
   // Regenerate PDF when returning to preview tab
   useEffect(() => {
@@ -295,17 +520,17 @@ export default function I9CompleteStep({
   // Helper function to check SSN mismatch
   const checkSsnMismatch = () => {
     if (!formData.ssn || !documentsData?.extractedData) return
-    
+
     console.log('Checking SSN mismatch - formData.ssn:', formData.ssn)
     console.log('Checking SSN mismatch - documentsData.extractedData:', documentsData.extractedData)
-    
+
     // Find SSN from extracted data - the backend returns it directly in the document object
-    const ssnDocument = documentsData.extractedData.find(doc => 
+    const ssnDocument = documentsData.extractedData.find(doc =>
       doc.documentType === 'social_security_card' || doc.type === 'social_security_card'
     )
-    
+
     console.log('Found SSN document:', ssnDocument)
-    
+
     // Check for SSN in the document - the backend returns it at the root level
     const extractedSsn = ssnDocument?.ssn
     
@@ -335,7 +560,67 @@ export default function I9CompleteStep({
       console.log('SSN Match confirmed')
     }
   }
-  
+
+  // Function to completely reset the I-9 step
+  const handleCompleteReset = () => {
+    console.log('Resetting entire I-9 step due to missing files')
+
+    // Clear all state
+    setFormData({})
+    setSupplementsData(null)
+    setDocumentsData(null)
+    setFormComplete(false)
+    setSupplementsComplete(false)
+    setDocumentsComplete(false)
+    setIsSigned(false)
+    setSignatureData(null)
+    setSignedFormDataHash(null)
+    setSsnMismatch({ hasWarning: false, acknowledged: false })
+    setNeedsSupplements('none')
+    setPdfUrl(null)
+    setRemotePdfUrl(null)
+    setDocumentMetadata(null)
+    setMetadataError(null)
+    setUploadedDocsMetadata(null)
+    setMissingFiles({ i9Pdf: false, dlDocument: false, ssnDocument: false })
+    setFilesValidated(false)
+
+    // Clear session storage
+    sessionStorage.removeItem(`onboarding_${currentStep.id}_data`)
+
+    // Reset to first tab
+    setActiveTab('form')
+
+    // Auto-fill from personal info again
+    const personalInfoData = sessionStorage.getItem('onboarding_personal-info_data')
+    if (personalInfoData) {
+      try {
+        const parsedData = JSON.parse(personalInfoData)
+        const personalInfo = parsedData.personalInfo || parsedData || {}
+
+        const mappedData = {
+          last_name: personalInfo.lastName || '',
+          first_name: personalInfo.firstName || '',
+          middle_initial: personalInfo.middleInitial || '',
+          date_of_birth: personalInfo.dateOfBirth || '',
+          ssn: personalInfo.ssn || '',
+          email: personalInfo.email || '',
+          phone: personalInfo.phone || '',
+          address: personalInfo.address || '',
+          apt_number: personalInfo.aptNumber || personalInfo.apartment || '',
+          city: personalInfo.city || '',
+          state: personalInfo.state || '',
+          zip_code: personalInfo.zipCode || ''
+        }
+
+        console.log('Re-populating form data from PersonalInfoStep after reset')
+        setFormData(mappedData)
+      } catch (e) {
+        console.error('Error re-populating from personal info:', e)
+      }
+    }
+  }
+
   // Tab change handler with validation
   const handleTabChange = (newTab: string) => {
     const currentTabIndex = tabs.findIndex(t => t.id === activeTab)
@@ -443,8 +728,7 @@ export default function I9CompleteStep({
     // Also save to I-9 Section 1 endpoint for cloud storage
     if (employee?.id && !employee.id.startsWith('demo-')) {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || '/api'
-        await axios.post(`${apiUrl}/api/onboarding/${employee.id}/i9-section1`, {
+        await axios.post(`${getApiUrl()}/onboarding/${employee.id}/i9-section1`, {
           formData: updatedFormData,
           signed: false,
           formValid: true
@@ -499,27 +783,88 @@ export default function I9CompleteStep({
       }
     }
     
-    setDocumentsData(data)
-    setDocumentsComplete(true)
-    
-    // Store extracted data for Section 2
-    if (data.extractedData) {
-      sessionStorage.setItem('i9_section2_data', JSON.stringify(data.extractedData))
+    // Upload each completed document to storage (if not already uploaded)
+    if (employee?.id && data?.uploadedDocuments?.length) {
+      for (const doc of data.uploadedDocuments) {
+        // Skip if already uploaded to storage
+        if (doc.storageMetadata) {
+          console.log('Document already uploaded to storage:', doc.type)
+          continue
+        }
+
+        const fileToUpload: File | undefined = doc.file || doc.originalFile
+        if (!fileToUpload) {
+          console.warn('Skipping upload: no File object available for document', doc.type)
+          continue
+        }
+
+        try {
+          const uploadResult = await uploadOnboardingDocument({
+            employeeId: employee.id,
+            documentType: doc.type, // This will be 'list_a', 'list_b', 'list_c'
+            documentCategory: doc.type, // Backend expects this format
+            file: fileToUpload
+          })
+          doc.storageMetadata = uploadResult?.data || uploadResult
+          console.log('Document uploaded to storage (retry):', doc.type)
+        } catch (error) {
+          console.error('Failed to upload I-9 document to storage:', doc.type, error)
+        }
+      }
     }
-    
-    // Save the documents data and check for SSN mismatch
-    await saveProgress(currentStep.id, { documentsData: data, documentsComplete: true })
-    
+
+    const sanitizedUploadedDocuments = (data.uploadedDocuments || []).map((doc: any) => ({
+      type: doc.type,
+      category: doc.category,
+      fileName: doc.file?.name || doc.fileName || `${doc.type}`,
+      status: doc.status || 'complete',
+      extractedData: doc.extractedData,
+      storageMetadata: doc.storageMetadata ?? null
+    }))
+
+    const sanitizedData = {
+      ...data,
+      uploadedDocuments: sanitizedUploadedDocuments
+    }
+
+    setDocumentsData(sanitizedData)
+    setDocumentsComplete(true)
+
+    // Store extracted data for Section 2
+    if (sanitizedData.extractedData) {
+      sessionStorage.setItem('i9_section2_data', JSON.stringify(sanitizedData.extractedData))
+    }
+
+    // Persist sanitized documents metadata for cross-session restoration
+    if (employee?.id && sessionToken) {
+      try {
+        await persistStepDocument(
+          employee.id,
+          'i9-uploads',
+          {
+            uploadedDocuments: sanitizedUploadedDocuments,
+            extractedData: sanitizedData.extractedData,
+            uploadedAt: new Date().toISOString()
+          },
+          { token: sessionToken }
+        )
+      } catch (error) {
+        console.error('Failed to store I-9 upload metadata:', error)
+      }
+    }
+
+    await saveProgress(currentStep.id, { documentsData: sanitizedData, documentsComplete: true })
+
     // Check for SSN mismatch after documents are uploaded
-    console.log('Checking SSN after document upload - data.extractedData:', data.extractedData)
+    console.log('Checking SSN after document upload - data.extractedData:', sanitizedData.extractedData)
     console.log('Current formData.ssn:', formData.ssn)
-    
-    if (data.extractedData && formData.ssn) {
+
+    if (sanitizedData.extractedData && formData.ssn) {
       // Find SSN document
-      const ssnDocument = data.extractedData.find(doc => 
+      const ssnDocument = sanitizedData.extractedData.find((doc: any) => 
         doc.documentType === 'social_security_card' || doc.type === 'social_security_card'
       )
-      
+
       console.log('Found SSN document in handleDocumentsComplete:', ssnDocument)
       
       // Check for SSN in the document - the backend returns it at the root level
@@ -569,8 +914,8 @@ export default function I9CompleteStep({
     }
     
     // Generate PDF before showing preview
-    await generateCompletePdf(data)
-    
+    await generateCompletePdf(sanitizedData)
+
     setActiveTab('preview')
   }
   
@@ -581,6 +926,10 @@ export default function I9CompleteStep({
       console.log('Documents received in generateCompletePdf:', documents)
       console.log('Extracted data:', documents?.extractedData)
       
+      // Reset remote references when generating a fresh preview
+      setRemotePdfUrl(null)
+      setDocumentMetadata(null)
+
       // Prepare complete form data including Section 2 info from documents
       const completeFormData = {
         ...formData,
@@ -616,95 +965,188 @@ export default function I9CompleteStep({
       // Set the base64 PDF data - PDFViewer expects base64 string
       console.log('Setting PDF URL, base64 length:', base64String.length)
       setPdfUrl(base64String)
-      
+      return base64String
     } catch (error) {
       console.error('Error generating PDF:', error)
       // Continue without PDF preview
+      return null
     } finally {
       setIsGeneratingPdf(false)
     }
   }
 
   const handleSign = async (signature: any) => {
-    // Prevent double signing
     if (isSigned) {
       return
     }
-    
-    // Store signature data and create hash of current form state
+
     setSignatureData(signature)
-    
-    // Create hash of current form data
+
     const currentDataHash = createFormDataHash({
       formData,
       supplementsData,
       documentsData
     })
     setSignedFormDataHash(currentDataHash)
-    
+
+    let basePdf = pdfUrl
+    if (!basePdf) {
+      basePdf = await generateCompletePdf(documentsData)
+    }
+
+    if (!basePdf) {
+      console.error('Unable to generate base I-9 PDF before signing')
+      return
+    }
+
+    let signedPdfBase64: string
+    try {
+      signedPdfBase64 = await addSignatureToExistingPdf(basePdf, signature)
+      setPdfUrl(signedPdfBase64)
+      setRemotePdfUrl(null)
+      setDocumentMetadata(null)
+      setMissingFiles(prev => ({ ...prev, i9Pdf: false }))
+    } catch (error) {
+      console.error('Failed to overlay signature onto I-9 PDF:', error)
+      return
+    }
+
+    let remotePdfUrl: string | null = null
+    let documentMetadata: StepDocumentMetadata | null = null
+    let inlinePdfData: string | null = signedPdfBase64
+
+    if (employee?.id && !employee.id.startsWith('demo-')) {
+      try {
+        const uploadResponse = await uploadSignedI9Pdf({
+          employeeId: employee.id,
+          pdfBase64: signedPdfBase64,
+          signatureData: {
+            ...signature,
+            signedAt: signature.signedAt || new Date().toISOString()
+          },
+          formData,
+          documentsData
+        })
+
+        if (uploadResponse?.success && uploadResponse?.data) {
+          const payload = uploadResponse.data
+          if (payload.pdf_url) {
+            remotePdfUrl = payload.pdf_url
+            setRemotePdfUrl(payload.pdf_url)
+            console.log('Signed I-9 stored in Supabase:', payload.pdf_url)
+          }
+          if (payload.document_metadata) {
+            documentMetadata = payload.document_metadata as StepDocumentMetadata
+            setDocumentMetadata(documentMetadata)
+          }
+          if (payload.pdf) {
+            inlinePdfData = payload.pdf
+            setPdfUrl(payload.pdf)
+          }
+        } else {
+          console.error('Failed to store signed I-9 PDF:', uploadResponse)
+        }
+      } catch (error) {
+        console.error('Error uploading signed I-9 PDF:', error)
+      }
+    }
+
+    const completedAt = new Date().toISOString()
     const completeData = {
       formData,
       supplementsData,
       documentsData,
       signed: true,
-      isSigned: true, // Include both for compatibility
+      isSigned: true,
       signatureData: signature,
       signedFormDataHash: currentDataHash,
-      completedAt: new Date().toISOString(),
+      completedAt,
       needsSupplements,
-      pdfUrl: pdfUrl // Include the PDF URL
+      pdfGenerated: true,
+      pdfGeneratedAt: completedAt,
+      remotePdfUrl,
+      documentMetadata,
+      inlinePdfData
     }
-    
-    // Save to backend if we have an employee ID
+
     if (employee?.id && !employee.id.startsWith('demo-')) {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || '/api'
-        
-        // Save I-9 Section 1 with signature
-        await axios.post(`${apiUrl}/api/onboarding/${employee.id}/i9-section1`, {
+        await axios.post(`${getApiUrl()}/onboarding/${employee.id}/i9-section1`, {
           formData,
           signed: true,
           signatureData: signature.signature,
-          completedAt: completeData.completedAt,
-          pdfUrl: pdfUrl
+          completedAt: completedAt,
+          pdfUrl: inlinePdfData
         })
         console.log('I-9 Section 1 with signature saved to cloud')
-        
-        // Save I-9 Section 2 documents if we have them
+
         if (documentsData && documentsData.uploadedDocuments) {
-          const documentMetadata = documentsData.uploadedDocuments.map((doc: any) => ({
-            id: doc.id,
+          const documentMetadataPayload = documentsData.uploadedDocuments.map((doc: any) => ({
             type: doc.type,
-            documentType: doc.documentType,
+            category: doc.category,
+            storageMetadata: doc.storageMetadata,
             fileName: doc.fileName,
-            fileSize: doc.fileSize,
-            uploadedAt: doc.uploadedAt,
-            ocrData: doc.ocrData
+            extractedData: doc.extractedData
           }))
-          
-          await axios.post(`${apiUrl}/api/onboarding/${employee.id}/i9-section2`, {
+
+          await axios.post(`${getApiUrl()}/onboarding/${employee.id}/i9-section2`, {
             documentSelection: documentsData.documentSelection || '',
-            uploadedDocuments: documentMetadata,
+            uploadedDocuments: documentMetadataPayload,
             verificationComplete: true,
-            completedAt: completeData.completedAt
+            completedAt
           })
           console.log('I-9 Section 2 documents saved to cloud')
         }
+
+        if (sessionToken) {
+          await persistStepDocument(
+            employee.id,
+            'i9-section1',
+            {
+              formData,
+              signed: true,
+              signature: signature,
+              completedAt,
+              documentMetadata,
+              remotePdfUrl,
+              inlinePdfData
+            },
+            { token: sessionToken }
+          )
+
+          if (documentsData && documentsData.uploadedDocuments) {
+            await persistStepDocument(
+              employee.id,
+              'i9-uploads',
+              {
+                uploadedDocuments: documentsData.uploadedDocuments,
+                extractedData: documentsData.extractedData,
+                lastUpdatedAt: completedAt
+              },
+              { token: sessionToken }
+            )
+          }
+
+          await persistStepDocument(
+            employee.id,
+            'i9-complete',
+            {
+              documentMetadata,
+              remotePdfUrl,
+              completedAt,
+              signed: true
+            },
+            { token: sessionToken }
+          )
+        }
       } catch (error) {
-        console.error('Failed to save I-9 data to backend:', error)
-        // Continue even if backend save fails - data is in session storage
+        console.error('Failed to persist I-9 metadata:', error)
       }
     }
-    
-    // Save the signed status to session storage immediately
+
     await saveProgress(currentStep.id, completeData)
-    
-    // Update session storage directly to ensure it's available for validation
     sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(completeData))
-    
-    // Regenerate PDF with signature
-    await generateCompletePdf(documentsData, signature)
-    
+
     setIsSigned(true)
     await markStepComplete(currentStep.id, completeData)
   }
@@ -725,6 +1167,66 @@ export default function I9CompleteStep({
   
   const t = translations[language]
   
+  const renderMissingDocumentState = () => {
+    return (missingFiles.i9Pdf || (!remotePdfUrl && !documentMetadata?.signed_url && !pdfUrl))
+  }
+
+  const renderDocumentPreview = () => {
+    if (pdfUrl || remotePdfUrl) {
+      return (
+        <div>
+          {documentMetadata && (
+            <div className="text-xs text-gray-600 space-y-1 mb-2">
+              {documentMetadata.filename && (
+                <p>Stored file: {documentMetadata.filename}</p>
+              )}
+              {documentMetadata.generated_at && (
+                <p>Generated: {new Date(documentMetadata.generated_at).toLocaleString()}</p>
+              )}
+            </div>
+          )}
+          {metadataError && (
+            <Alert className="bg-amber-50 border-amber-200 mb-4">
+              <AlertTriangle className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-800">
+                <div className="space-y-2">
+                  <p className="font-medium">
+                    {metadataError === 'Document file missing from storage'
+                      ? (language === 'es'
+                          ? 'El archivo del documento firmado fue eliminado del almacenamiento.'
+                          : 'The signed document file was deleted from storage.')
+                      : metadataError}
+                  </p>
+                  <button
+                    onClick={handleCompleteReset}
+                    className="text-sm text-amber-700 underline hover:text-amber-800 font-medium"
+                  >
+                    {language === 'es'
+                      ? 'Haga clic aquí para reiniciar el proceso I-9'
+                      : 'Click here to restart the I-9 process'}
+                  </button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+          {metadataLoading && !metadataError && (
+            <p className="text-xs text-gray-500 mb-2">Refreshing stored document link...</p>
+          )}
+          {/* Only show PDF viewer if we don't have a metadata error */}
+          {!metadataError && (
+            <PDFViewer
+              pdfUrl={remotePdfUrl || documentMetadata?.signed_url || undefined}
+              pdfData={!remotePdfUrl && !documentMetadata?.signed_url ? pdfUrl ?? undefined : undefined}
+              height="600px"
+              title="Signed I-9 Form"
+            />
+          )}
+        </div>
+      )
+    }
+    return null
+  }
+
   return (
     <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus}>
       <StepContentWrapper>
@@ -890,6 +1392,27 @@ export default function I9CompleteStep({
                 </label>
               </div>
               
+              {needsSupplements === 'none' && (
+                <div className="flex justify-between pt-4">
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setActiveTab('form')
+                      scrollToTop()
+                    }}
+                  >
+                    {language === 'es' ? 'Regresar al Formulario' : 'Back to Form'}
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      handleSupplementsComplete()
+                    }}
+                  >
+                    {language === 'es' ? 'Continuar a Documentos' : 'Continue to Documents'}
+                  </Button>
+                </div>
+              )}
+
               {needsSupplements === 'translator' && (
                 <div className="mt-6">
                   <I9SupplementA
@@ -908,16 +1431,6 @@ export default function I9CompleteStep({
                 </div>
               )}
               
-              {needsSupplements === 'none' && (
-                <div className="flex justify-end mt-6">
-                  <button
-                    onClick={handleSupplementsComplete}
-                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                  >
-                    {language === 'es' ? 'Continuar' : 'Continue'}
-                  </button>
-                </div>
-              )}
             </div>
           </TabsContent>
           
@@ -927,6 +1440,7 @@ export default function I9CompleteStep({
               onComplete={handleDocumentsComplete}
               language={language}
               initialData={documentsData}
+              employee={employee}
             />
           </TabsContent>
           
@@ -965,31 +1479,83 @@ export default function I9CompleteStep({
                     </div>
                   </AlertDescription>
                 </Alert>
+
+                {/* Comprehensive redo UI for missing files */}
+                {renderMissingDocumentState() ? (
+                  <Alert className="bg-red-50 border-red-200">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                    <AlertDescription className="text-red-800">
+                      <div className="space-y-4">
+                        <div>
+                          <p className="font-semibold text-lg mb-2">
+                            {language === 'es'
+                              ? 'Documentos I-9 no encontrados'
+                              : 'I-9 Documents Not Found'}
+                          </p>
+                          <p className="text-sm mb-3">
+                            {language === 'es'
+                              ? 'Los siguientes documentos requeridos no se encuentran en el sistema:'
+                              : 'The following required documents are missing from the system:'}
+                          </p>
+                          <ul className="list-disc list-inside space-y-1 text-sm ml-2">
+                            {(missingFiles.i9Pdf || (!remotePdfUrl && !documentMetadata?.signed_url && !pdfUrl)) && (
+                              <li className="text-red-700 font-medium">
+                                {language === 'es'
+                                  ? '✗ Formulario I-9 firmado'
+                                  : '✗ Signed I-9 Form'}
+                              </li>
+                            )}
+                            {missingFiles.dlDocument && (
+                              <li className="text-red-700 font-medium">
+                                {language === 'es'
+                                  ? '✗ Licencia de conducir'
+                                  : '✗ Driver\'s License'}
+                              </li>
+                            )}
+                            {missingFiles.ssnDocument && (
+                              <li className="text-red-700 font-medium">
+                                {language === 'es'
+                                  ? '✗ Tarjeta de Seguro Social'
+                                  : '✗ Social Security Card'}
+                              </li>
+                            )}
+                          </ul>
+                        </div>
+
+                        <div className="bg-white p-3 rounded border border-red-200">
+                          <p className="text-sm font-medium mb-2">
+                            {language === 'es'
+                              ? 'Para continuar, debe completar todo el proceso I-9 nuevamente:'
+                              : 'To continue, you must complete the entire I-9 process again:'}
+                          </p>
+                          <ol className="list-decimal list-inside text-xs space-y-1 text-gray-700 ml-2">
+                            <li>{language === 'es' ? 'Completar el formulario I-9' : 'Complete the I-9 form'}</li>
+                            <li>{language === 'es' ? 'Responder preguntas de suplementos' : 'Answer supplement questions'}</li>
+                            <li>{language === 'es' ? 'Cargar documentos de identidad' : 'Upload identity documents'}</li>
+                            <li>{language === 'es' ? 'Revisar y firmar' : 'Review and sign'}</li>
+                          </ol>
+                        </div>
+
+                        <button
+                          onClick={handleCompleteReset}
+                          className="w-full bg-red-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-red-700 transition-colors"
+                        >
+                          {language === 'es'
+                            ? '🔄 Reiniciar Proceso I-9 Completo'
+                            : '🔄 Restart Entire I-9 Process'}
+                        </button>
+
+                        <p className="text-xs text-gray-600 text-center italic">
+                          {language === 'es'
+                            ? 'Nota: Sus datos personales básicos se conservarán del paso de información personal.'
+                            : 'Note: Your basic personal information will be retained from the personal info step.'}
+                        </p>
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                ) : renderDocumentPreview()}
                 
-                {pdfUrl ? (
-                  <div>
-                    <p className="text-sm text-gray-600 mb-2">PDF Preview ({pdfUrl.length} bytes)</p>
-                    <PDFViewer pdfData={pdfUrl} height="600px" />
-                  </div>
-                ) : (
-                  <p className="text-sm text-gray-600">Loading PDF...</p>
-                )}
-                
-                <div className="flex justify-between">
-                  <button
-                    onClick={() => handleTabChange('documents')}
-                    className="px-4 py-2 text-gray-600 hover:text-gray-800"
-                  >
-                    {language === 'es' ? '← Volver' : '← Back'}
-                  </button>
-                  <button
-                    onClick={() => goToNextStep()}
-                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                  >
-                    {language === 'es' ? 'Continuar →' : 'Continue →'}
-                  </button>
-                </div>
-              </div>
+                              </div>
             ) : (
               <ReviewAndSign
                 formType="i9-complete"
@@ -1002,7 +1568,7 @@ export default function I9CompleteStep({
                 onSign={handleSign}
                 onBack={() => setActiveTab('documents')}
                 usePDFPreview={true}
-                pdfUrl={pdfUrl}
+                pdfUrl={remotePdfUrl || pdfUrl}
                 federalCompliance={{
                   formName: 'Form I-9, Employment Eligibility Verification',
                   retentionPeriod: '3 years after hire or 1 year after termination (whichever is later)',

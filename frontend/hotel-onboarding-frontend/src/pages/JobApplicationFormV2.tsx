@@ -27,7 +27,7 @@ import {
   Globe,
   Loader2
 } from 'lucide-react'
-import { apiClient } from '@/services/api'
+import api from '@/services/api'
 
 // Import step components
 import PersonalInformationStep from '@/components/job-application/PersonalInformationStep'
@@ -272,13 +272,15 @@ export default function JobApplicationFormV2() {
 
   const fetchProperty = async () => {
     try {
-      const response = await apiClient.get(`/properties/${propertyId}/info`)
+      const response = await api.properties.getInfo(propertyId)
       setPropertyInfo(response.data)
       // Set property name in form data for use in other components
-      setFormData(prev => ({
-        ...prev,
-        property_name: response.data.property.name
-      }))
+      if (response.data?.property?.name) {
+        setFormData(prev => ({
+          ...prev,
+          property_name: response.data.property.name
+        }))
+      }
     } catch (error) {
       console.error('Failed to fetch property:', error)
       setError('Failed to load property information. Please try again.')
@@ -471,6 +473,9 @@ export default function JobApplicationFormV2() {
 
       // Submit the application (align keys to backend schema where needed)
       const payload = {
+        // Track the language used for submission
+        application_language: i18n.language,
+
         // Personal Information - Complete
         first_name: formData.first_name,
         middle_initial: formData.middle_name ? formData.middle_name[0] : undefined,
@@ -493,9 +498,9 @@ export default function JobApplicationFormV2() {
         position: formData.position,
         salary_desired: formData.desired_salary || null,  // Map frontend field to backend field name
         
-        // Work Authorization & Legal
-        work_authorized: formData.work_authorized || 'yes',
-        sponsorship_required: formData.sponsorship_required || 'no',
+        // Work Authorization & Legal - Use language-agnostic values
+        work_authorized: formData.work_authorized === 'yes' || formData.work_authorized === 'sí' ? 'yes' : 'no',
+        sponsorship_required: formData.sponsorship_required === 'yes' || formData.sponsorship_required === 'sí' ? 'yes' : 'no',
         age_verification: formData.age_verification !== false,  // Default to true if not explicitly false
         conviction_record: {
           has_conviction: formData.has_criminal_record === 'yes',
@@ -615,7 +620,7 @@ export default function JobApplicationFormV2() {
         additional_comments: formData.additional_comments || ''
       }
 
-      await apiClient.post(`/apply/${propertyId}`, payload)
+      await api.applications.submitToProperty(propertyId, payload)
       
       // Clear draft on successful submission
       localStorage.removeItem(`job-application-draft-${propertyId}`)
@@ -751,15 +756,15 @@ export default function JobApplicationFormV2() {
             <CardDescription>
               {propertyInfo ? (
                 <div className="space-y-2">
-                  <p className="text-lg">{propertyInfo.property.name}</p>
+                  <p className="text-lg">{propertyInfo?.property?.name}</p>
                   <div className="flex items-center justify-center space-x-4 text-sm text-gray-600">
                     <div className="flex items-center">
                       <MapPin className="w-4 h-4 mr-1" />
-                      {propertyInfo.property.city}, {propertyInfo.property.state}
+                      {propertyInfo?.property?.city}, {propertyInfo?.property?.state}
                     </div>
                     <div className="flex items-center">
                       <Phone className="w-4 h-4 mr-1" />
-                      {propertyInfo.property.phone}
+                      {propertyInfo?.property?.phone}
                     </div>
                   </div>
                 </div>
@@ -837,50 +842,69 @@ export default function JobApplicationFormV2() {
               onComplete={handleStepComplete}
             />
 
-            {/* Simplified Navigation - Responsive for Mobile & Desktop */}
-            <div className="flex justify-between gap-3 mt-8 pt-6 border-t">
-              <Button
-                variant="outline"
-                onClick={handlePrevious}
-                disabled={currentStep === 0}
-                className="flex-1 sm:flex-initial sm:min-w-[120px] sm:px-8 h-12 font-medium hover:bg-gray-50 hover:text-gray-900 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4 mr-1 sm:mr-2" />
-                <span className="hidden sm:inline">{t('common.previous')}</span>
-                <span className="sm:hidden">{t('common.back')}</span>
-              </Button>
-
-              {currentStep === steps.length - 1 ? (
-                <Button
-                  onClick={handleSubmit}
-                  disabled={loading}
-                  className="flex-1 sm:flex-initial sm:min-w-[120px] sm:px-8 h-12 font-medium bg-green-600 hover:bg-green-700 text-white"
-                >
-                  {loading ? (
-                    <span className="flex items-center justify-center">
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      <span className="hidden sm:inline">{t('common.loading')}</span>
-                    </span>
-                  ) : (
-                    <span className="flex items-center justify-center">
-                      <CheckCircle2 className="w-4 h-4 mr-1 sm:mr-2" />
-                      {t('common.submit')}
-                    </span>
-                  )}
-                </Button>
-              ) : (
-                <Button
-                  onClick={handleNext}
-                  className="flex-1 sm:flex-initial sm:min-w-[120px] sm:px-8 h-12 font-medium bg-blue-600 hover:bg-blue-700 text-white"
-                >
-                  <span className="hidden sm:inline">{t('common.next')}</span>
-                  <span className="sm:hidden">{t('common.continue')}</span>
-                  <ChevronRight className="w-4 h-4 ml-1 sm:ml-2" />
-                </Button>
-              )}
-            </div>
           </CardContent>
         </Card>
+
+        {/* Mobile-Optimized Sticky Navigation */}
+        <div className="sticky bottom-0 left-0 right-0 bg-white border-t shadow-lg mt-8 -mx-4 sm:mx-0 sm:relative sm:bg-transparent sm:border-0 sm:shadow-none">
+          <div className="flex gap-3 p-4 sm:p-0 sm:pt-6">
+            {/* Previous Button */}
+            <Button
+              variant="outline"
+              onClick={handlePrevious}
+              disabled={currentStep === 0}
+              className="flex-1 sm:flex-initial sm:min-w-[140px] min-h-[48px] font-medium
+                         hover:bg-gray-50 hover:text-gray-900 active:scale-95
+                         transition-all duration-150 shadow-sm"
+            >
+              <ChevronLeft className="w-5 h-5 mr-2" />
+              <span className="hidden sm:inline">{t('common.previous')}</span>
+              <span className="sm:hidden">{t('common.back')}</span>
+            </Button>
+
+            {/* Submit or Next Button */}
+            {currentStep === steps.length - 1 ? (
+              <Button
+                onClick={handleSubmit}
+                disabled={loading}
+                className="flex-1 sm:flex-initial sm:min-w-[140px] min-h-[48px] font-medium
+                          bg-green-600 hover:bg-green-700 active:bg-green-800 active:scale-95
+                          text-white shadow-md transition-all duration-150"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center">
+                    <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    <span>{t('common.loading')}</span>
+                  </span>
+                ) : (
+                  <span className="flex items-center justify-center">
+                    <Send className="w-5 h-5 mr-2" />
+                    {t('common.submit')}
+                  </span>
+                )}
+              </Button>
+            ) : (
+              <Button
+                onClick={handleNext}
+                className="flex-1 sm:flex-initial sm:min-w-[140px] min-h-[48px] font-medium
+                          bg-blue-600 hover:bg-blue-700 active:bg-blue-800 active:scale-95
+                          text-white shadow-md transition-all duration-150"
+              >
+                <span>{currentStep === 0 ? t('common.getStarted') : t('common.continue')}</span>
+                <ChevronRight className="w-5 h-5 ml-2" />
+              </Button>
+            )}
+          </div>
+
+          {/* Mobile Progress Indicator */}
+          <div className="sm:hidden px-4 pb-2">
+            <div className="flex justify-between items-center text-xs text-gray-600">
+              <span>Step {currentStep + 1} of {steps.length}</span>
+              <span>{Math.round(calculateProgress())}% Complete</span>
+            </div>
+            <Progress value={calculateProgress()} className="h-1 mt-1" />
+          </div>
+        </div>
         
         {/* Legal Disclaimer - Only show on Additional Information step */}
         {steps[currentStep].id === 'additional-info' && (

@@ -110,7 +110,7 @@ export function useSyncStatus(options: UseSyncStatusOptions = {}) {
     isOnline,
     startSync,
     syncSuccess,
-    syncError: reportSyncError,
+    reportSyncError,
     syncOffline
   }
 }

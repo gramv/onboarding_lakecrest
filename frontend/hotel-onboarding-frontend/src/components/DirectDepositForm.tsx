@@ -310,7 +310,7 @@ export default function DirectDepositForm({
           <RadioGroup 
             value={formData.depositType} 
             onValueChange={(value) => handleInputChange('depositType', value)}
-            className="grid grid-cols-1 md:grid-cols-3 gap-2"
+            className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2"
           >
             <div className="flex items-center space-x-2 p-2 border rounded">
               <RadioGroupItem value="full" id="full" />
@@ -346,7 +346,7 @@ export default function DirectDepositForm({
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
             <div>
               <Label htmlFor="bankName" className="text-sm">{t('bank_name')} *</Label>
               <Input
@@ -412,7 +412,7 @@ export default function DirectDepositForm({
           
           {/* Additional fields for partial/split */}
           {(formData.depositType === 'partial' || formData.depositType === 'split') && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
               {formData.depositType === 'partial' && (
                 <div>
                   <Label htmlFor="depositAmount" className="text-sm">{t('deposit_amount')} *</Label>
@@ -482,7 +482,7 @@ export default function DirectDepositForm({
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>{t('bank_name')} *</Label>
                     <Input
@@ -542,7 +542,7 @@ export default function DirectDepositForm({
                     )}
                   </div>
 
-                  <div className="md:col-span-2">
+                  <div className="sm:col-span-2">
                     <Label>{t('percentage')} *</Label>
                     <Input
                       type="number"
@@ -585,7 +585,7 @@ export default function DirectDepositForm({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="border rounded p-3">
               <h4 className="font-medium text-sm mb-1">{t('voided_check')}</h4>
               <input
@@ -683,7 +683,7 @@ export default function DirectDepositForm({
             <p className="text-red-600 text-xs">{errors.authorizeDeposit}</p>
           )}
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label htmlFor="dateOfAuth" className="text-sm">{t('date_of_auth')} *</Label>
               <Input

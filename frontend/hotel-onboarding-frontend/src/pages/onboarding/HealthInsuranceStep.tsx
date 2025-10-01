@@ -11,15 +11,20 @@ import { useAutoSave } from '@/hooks/useAutoSave'
 import { useStepValidation } from '@/hooks/useStepValidation'
 import { healthInsuranceValidator } from '@/utils/stepValidators'
 import axios from 'axios'
+import { getApiUrl } from '@/config/api'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 
 export default function HealthInsuranceStep({
   currentStep,
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   const [formData, setFormData] = useState<any>({})
@@ -129,8 +134,7 @@ export default function HealthInsuranceStep({
     // Save to backend if we have an employee ID
     if (employee?.id) {
       try {
-        const apiUrl = import.meta.env.VITE_API_URL || '/api'
-        await axios.post(`${apiUrl}/api/onboarding/${employee.id}/health-insurance`, completeData)
+        await axios.post(`${getApiUrl()}/onboarding/${employee.id}/health-insurance`, completeData)
         console.log('Health insurance data saved to backend')
       } catch (error) {
         console.error('Failed to save health insurance data to backend:', error)
@@ -159,40 +163,45 @@ export default function HealthInsuranceStep({
 
   const isStepComplete = isValid && isSigned
 
+
   const translations = {
     en: {
       title: 'Health Insurance Enrollment',
-      reviewTitle: 'Review Health Insurance',
+      reviewTitle: 'Review & Sign Health Insurance Enrollment',
       description: 'Choose your health insurance plan and add dependents if applicable. Your coverage will begin according to your plan\'s effective date.',
-      enrollmentPeriod: 'Enrollment Period:',
+      enrollmentPeriod: 'Enrollment Period',
       enrollmentNotice: 'You have 30 days from your hire date to enroll in health insurance or make changes to your coverage.',
       completionMessage: 'Health insurance enrollment completed successfully.',
       planSelectionTitle: 'Health Insurance Plan Selection',
       estimatedTime: 'Estimated time: 6-8 minutes',
-      reviewDescription: 'Please review your health insurance selections and dependent information',
+      reviewDescription: 'Review your health insurance plan selections and dependent information before signing',
       acknowledgments: {
         planSelection: 'I have reviewed and selected the appropriate health insurance plan',
         dependentInfo: 'All dependent information provided is accurate and complete',
         coverage: 'I understand when my coverage will begin',
         changes: 'I understand I can make changes during open enrollment or qualifying life events'
-      }
+      },
+      certificateTitle: 'Health Insurance Enrollment Certificate',
+      completedCertificate: 'Your health insurance enrollment has been completed and signed'
     },
     es: {
       title: 'Inscripción en Seguro de Salud',
-      reviewTitle: 'Revisar Seguro de Salud',
+      reviewTitle: 'Revisar y Firmar Inscripción en Seguro de Salud',
       description: 'Elija su plan de seguro de salud y agregue dependientes si corresponde. Su cobertura comenzará según la fecha de vigencia de su plan.',
-      enrollmentPeriod: 'Período de Inscripción:',
+      enrollmentPeriod: 'Período de Inscripción',
       enrollmentNotice: 'Tiene 30 días desde su fecha de contratación para inscribirse en el seguro de salud o hacer cambios en su cobertura.',
       completionMessage: 'Inscripción en seguro de salud completada exitosamente.',
       planSelectionTitle: 'Selección de Plan de Seguro de Salud',
       estimatedTime: 'Tiempo estimado: 6-8 minutos',
-      reviewDescription: 'Por favor revise sus selecciones de seguro de salud e información de dependientes',
+      reviewDescription: 'Revise sus selecciones de plan de seguro de salud e información de dependientes antes de firmar',
       acknowledgments: {
         planSelection: 'He revisado y seleccionado el plan de seguro de salud apropiado',
         dependentInfo: 'Toda la información de dependientes proporcionada es precisa y completa',
         coverage: 'Entiendo cuándo comenzará mi cobertura',
         changes: 'Entiendo que puedo hacer cambios durante la inscripción abierta o eventos de vida calificados'
-      }
+      },
+      certificateTitle: 'Certificado de Inscripción en Seguro de Salud',
+      completedCertificate: 'Su inscripción en seguro de salud ha sido completada y firmada'
     }
   }
 
@@ -203,34 +212,67 @@ export default function HealthInsuranceStep({
     return (
       <StepContainer errors={errors} saveStatus={saveStatus}>
         <StepContentWrapper>
-          <div className="space-y-6">
-          <div className="text-center">
-            <div className="flex items-center justify-center space-x-2 mb-4">
-              <Heart className="h-6 w-6 text-blue-600" />
-              <h1 className="text-2xl font-bold text-gray-900">{t.reviewTitle}</h1>
+          <div className="space-y-8">
+            {/* Professional Header with Certificate Style */}
+            <div className="text-center space-y-4">
+              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg mb-4">
+                <Heart className="h-10 w-10 text-white" />
+              </div>
+              <div>
+                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+                  {t.reviewTitle}
+                </h1>
+                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                  {t.reviewDescription}
+                </p>
+              </div>
+
+              {/* Professional divider */}
+              <div className="flex items-center justify-center space-x-4 py-4">
+                <div className="h-px w-24 bg-gradient-to-r from-transparent to-blue-300"></div>
+                <Heart className="h-5 w-5 text-blue-500" />
+                <div className="h-px w-24 bg-gradient-to-l from-transparent to-blue-300"></div>
+              </div>
             </div>
-          </div>
-          
-          <ReviewAndSign
-            formType="health_insurance"
-            formTitle="Health Insurance Enrollment Form"
-            formData={formData}
-            documentName="Health Insurance Enrollment"
-            signerName={employee?.firstName + ' ' + employee?.lastName || 'Employee'}
-            signerTitle={employee?.position}
-            onSign={handleDigitalSignature}
-            onEdit={handleBackFromReview}
-            acknowledgments={[
-              t.acknowledgments.planSelection,
-              t.acknowledgments.dependentInfo,
-              t.acknowledgments.coverage,
-              t.acknowledgments.changes
-            ]}
-            language={language}
-            description={t.reviewDescription}
-            usePDFPreview={true}
-            pdfEndpoint={`${import.meta.env.VITE_API_URL || '/api'}/api/onboarding/${employee?.id || 'test-employee'}/health-insurance/generate-pdf`}
-          />
+
+            {/* Review and Sign Component */}
+            <div className="max-w-4xl mx-auto">
+              <ReviewAndSign
+                formType="health_insurance"
+                formTitle="Health Insurance Enrollment Form"
+                formData={formData}
+                documentName="Health Insurance Enrollment"
+                signerName={employee?.firstName + ' ' + employee?.lastName || 'Employee'}
+                signerTitle={employee?.position}
+                onSign={handleDigitalSignature}
+                onEdit={handleBackFromReview}
+                acknowledgments={[
+                  t.acknowledgments.planSelection,
+                  t.acknowledgments.dependentInfo,
+                  t.acknowledgments.coverage,
+                  t.acknowledgments.changes
+                ]}
+                language={language}
+                description={t.reviewDescription}
+                usePDFPreview={true}
+                pdfEndpoint={`${getApiUrl()}/onboarding/${employee?.id || 'test-employee'}/health-insurance/generate-pdf`}
+              />
+            </div>
+
+            {/* Navigation */}
+            <div className="max-w-4xl mx-auto">
+              <NavigationButtons
+                showPrevious={true}
+                showNext={true}
+                onPrevious={goToPreviousStep || (() => {})}
+                onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+                disabled={saveStatus?.saving}
+                saving={saveStatus?.saving}
+                hasErrors={false}
+                language={language}
+                nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+              />
+            </div>
           </div>
         </StepContentWrapper>
       </StepContainer>
@@ -240,59 +282,107 @@ export default function HealthInsuranceStep({
   return (
     <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus}>
       <StepContentWrapper>
-        <div className="space-y-6">
-        {/* Step Header */}
-        <div className="text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <Heart className="h-6 w-6 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+        <div className="space-y-8">
+          {/* Professional Header */}
+          <div className="text-center space-y-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg mb-3">
+              <Heart className="h-8 w-8 text-white" />
+            </div>
+            <div>
+              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+                {t.title}
+              </h1>
+              <p className="text-base md:text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+                {t.description}
+              </p>
+            </div>
+
+            {/* Professional divider */}
+            <div className="flex items-center justify-center space-x-4 py-3">
+              <div className="h-px w-20 bg-gradient-to-r from-transparent to-blue-300"></div>
+              <Heart className="h-4 w-4 text-blue-500" />
+              <div className="h-px w-20 bg-gradient-to-l from-transparent to-blue-300"></div>
+            </div>
           </div>
-          <p className="text-gray-600 max-w-3xl mx-auto">{t.description}</p>
-        </div>
 
-        {/* Enrollment Period Notice */}
-        <Alert className="bg-blue-50 border-blue-200">
-          <Heart className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800">
-            <strong>{t.enrollmentPeriod}</strong> {t.enrollmentNotice}
-          </AlertDescription>
-        </Alert>
-
-        {/* Completion Status */}
-        {isStepComplete && (
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              {t.completionMessage}
-            </AlertDescription>
+          {/* Enrollment Period Notice - Enhanced */}
+          <Alert className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-300 shadow-sm max-w-4xl mx-auto">
+            <div className="flex items-start gap-3">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
+                <Heart className="h-5 w-5 text-white" />
+              </div>
+              <div className="flex-1">
+                <h3 className="font-semibold text-blue-900 mb-1">{t.enrollmentPeriod}</h3>
+                <AlertDescription className="text-blue-800">
+                  {t.enrollmentNotice}
+                </AlertDescription>
+              </div>
+            </div>
           </Alert>
-        )}
 
-        {/* Health Insurance Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2">
-              <Users className="h-5 w-5 text-blue-600" />
-              <span>{t.planSelectionTitle}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <HealthInsuranceForm
-              initialData={formData}
+          {/* Completion Status - Enhanced */}
+          {isStepComplete && (
+            <Alert className="bg-gradient-to-r from-green-50 to-green-100 border-green-300 shadow-sm max-w-4xl mx-auto">
+              <div className="flex items-start gap-3">
+                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
+                  <CheckCircle className="h-5 w-5 text-white" />
+                </div>
+                <div className="flex-1">
+                  <AlertDescription className="text-green-800 font-medium">
+                    {t.completionMessage}
+                  </AlertDescription>
+                </div>
+              </div>
+            </Alert>
+          )}
+
+          {/* Health Insurance Form - Enhanced Card */}
+          <div className="max-w-5xl mx-auto">
+            <Card className="shadow-lg border-t-4 border-t-blue-500">
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-white pb-4">
+                <CardTitle className="flex items-center space-x-3 text-xl">
+                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                    <Users className="h-5 w-5 text-white" />
+                  </div>
+                  <span className="text-gray-900">{t.planSelectionTitle}</span>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <HealthInsuranceForm
+                  initialData={formData}
+                  language={language}
+                  onSave={handleFormSave}
+                  onValidationChange={(valid: boolean, errors?: Record<string, string>) => {
+                    console.log('HealthInsuranceStep - onValidationChange called, valid:', valid)
+                    setIsValid(valid)
+                  }}
+                />
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Time Estimate - Enhanced */}
+          <div className="text-center">
+            <p className="inline-flex items-center gap-2 text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+              {t.estimatedTime}
+            </p>
+          </div>
+
+          {/* Navigation */}
+          <div className="max-w-4xl mx-auto">
+            <NavigationButtons
+              showPrevious={true}
+              showNext={true}
+              onPrevious={goToPreviousStep || (() => {})}
+              onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+              disabled={saveStatus?.saving || !isValid}
+              saving={saveStatus?.saving}
+              hasErrors={false}
               language={language}
-              onSave={handleFormSave}
-              onValidationChange={(valid: boolean, errors?: Record<string, string>) => {
-                console.log('HealthInsuranceStep - onValidationChange called, valid:', valid)
-                setIsValid(valid)
-              }}
+              nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
             />
-          </CardContent>
-        </Card>
-
-        {/* Time Estimate */}
-        <div className="text-center text-sm text-gray-500">
-          <p>{t.estimatedTime}</p>
-        </div>
+          </div>
         </div>
       </StepContentWrapper>
     </StepContainer>

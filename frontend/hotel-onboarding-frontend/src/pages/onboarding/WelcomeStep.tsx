@@ -1,7 +1,10 @@
 import React, { useState, useEffect } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent } from '@/components/ui/card'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Label } from '@/components/ui/label'
 import { CheckCircle, Clock, FileText } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
@@ -80,7 +83,7 @@ export default function WelcomeStep({
   const t = translations[language]
 
   return (
-    <StepContainer saveStatus={saveStatus}>
+    <StepContainer saveStatus={saveStatus} canProceed={formData.welcomeAcknowledged}>
       <StepContentWrapper>
         <div className="space-y-6">
         {/* Clean Header */}
@@ -127,17 +130,74 @@ export default function WelcomeStep({
           </CardContent>
         </Card>
 
-        {/* Auto-acknowledge after viewing */}
-        {!formData.welcomeAcknowledged && (
-          <div className="text-center mt-4">
-            <button
-              onClick={() => setFormData(prev => ({ ...prev, welcomeAcknowledged: true }))}
-              className="text-body-small text-blue-600 hover:text-blue-700 underline"
-            >
-              I understand the requirements
-            </button>
+        {/* Acknowledgement Section */}
+        <div className="mt-8">
+          <div className="max-w-2xl mx-auto">
+            <div className={cn(
+              "relative rounded-xl border-2 p-6 transition-all duration-300",
+              formData.welcomeAcknowledged
+                ? "border-green-200 bg-gradient-to-br from-green-50 to-emerald-50 shadow-lg"
+                : "border-blue-200 bg-gradient-to-br from-blue-50 to-indigo-50 hover:border-blue-300 hover:shadow-md"
+            )}>
+              {/* Decorative corner accent */}
+              <div className={cn(
+                "absolute top-0 right-0 w-16 h-16 rounded-bl-3xl transition-colors duration-300",
+                formData.welcomeAcknowledged ? "bg-green-100" : "bg-blue-100"
+              )} />
+
+              <div className="relative">
+                <div className="flex items-start gap-4">
+                  <div className="flex-shrink-0 mt-1">
+                    <Checkbox
+                      id="welcome-acknowledgement"
+                      checked={formData.welcomeAcknowledged}
+                      onCheckedChange={(checked) =>
+                        setFormData(prev => ({
+                          ...prev,
+                          welcomeAcknowledged: Boolean(checked)
+                        }))
+                      }
+                      className={cn(
+                        "transition-all duration-200",
+                        formData.welcomeAcknowledged
+                          ? "border-green-500 data-[state=checked]:bg-green-600"
+                          : "border-blue-400 hover:border-blue-500"
+                      )}
+                    />
+                  </div>
+
+                  <div className="flex-1">
+                    <Label
+                      htmlFor="welcome-acknowledgement"
+                      className={cn(
+                        "text-base font-medium leading-relaxed cursor-pointer transition-colors duration-200",
+                        formData.welcomeAcknowledged ? "text-green-800" : "text-blue-800 hover:text-blue-900"
+                      )}
+                    >
+                      I've reviewed what to expect and I'm ready to start my onboarding process.
+                    </Label>
+
+                    {formData.welcomeAcknowledged && (
+                      <div className="mt-3 flex items-center gap-2 text-sm text-green-700">
+                        <CheckCircle className="h-4 w-4" />
+                        <span className="font-medium">Ready to proceed! Click Next to continue.</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {!formData.welcomeAcknowledged && (
+              <div className="mt-4 text-center">
+                <p className="text-sm text-gray-600 flex items-center justify-center gap-2">
+                  <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+                  Please check the box above to enable the Next button
+                </p>
+              </div>
+            )}
           </div>
-        )}
+        </div>
         </div>
       </StepContentWrapper>
     </StepContainer>

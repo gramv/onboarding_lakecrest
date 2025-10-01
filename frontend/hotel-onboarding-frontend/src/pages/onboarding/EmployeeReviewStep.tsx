@@ -116,7 +116,7 @@ export default function EmployeeReviewStep(props: StepProps) {
   const allStepsComplete = completedStepsCount === totalSteps - 1 // Exclude this review step
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32">
       <div className="text-center">
         <div className="flex items-center justify-center space-x-2 mb-4">
           <Award className="h-6 w-6 text-blue-600" />

@@ -3,6 +3,7 @@
  * Provides secure document management with legal compliance
  */
 
+import { getApiUrl } from '@/config/api'
 import { DocumentType } from '@/types/documents'
 
 export interface DocumentMetadata {
@@ -284,8 +285,115 @@ class DocumentService {
 
 // Export singleton instance
 export const documentService = new DocumentService(
-  import.meta.env.VITE_API_URL || '/api/api'
+  getApiUrl()
 )
 
 // Export types
 export type { DocumentService }
+
+export interface StepDocumentMetadata {
+  bucket: string
+  path: string
+  filename?: string
+  version?: string
+  signed_url?: string
+  signed_url_expires_at?: string
+  generated_at?: string
+  checksum?: string | null
+  [key: string]: unknown
+}
+
+export interface StepDocumentResponse {
+  document_metadata: StepDocumentMetadata | null
+  has_document: boolean
+}
+
+export async function fetchStepDocumentMetadata(
+  employeeId: string,
+  stepId: string,
+  token: string,
+  options: { forceRefresh?: boolean } = {}
+): Promise<StepDocumentResponse> {
+  if (!employeeId || !stepId || !token) {
+    return { document_metadata: null, has_document: false }
+  }
+
+  const params = new URLSearchParams({ token })
+  if (options.forceRefresh) {
+    params.set('force_refresh', 'true')
+  }
+
+  const response = await fetch(
+    `${getApiUrl()}/onboarding/${encodeURIComponent(employeeId)}/documents/${encodeURIComponent(stepId)}?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to retrieve document metadata (${response.status})`)
+  }
+
+  const payload = await response.json()
+  const data = payload?.data ?? {}
+
+  return {
+    document_metadata: data.document_metadata ?? null,
+    has_document: Boolean(data.has_document)
+  }
+}
+
+export async function persistStepDocument(
+  employeeId: string,
+  stepId: string,
+  payload: Record<string, unknown>,
+  options: { token?: string } = {}
+): Promise<{ success: boolean; document_metadata?: StepDocumentMetadata | null }> {
+  const headers: HeadersInit = { 'Content-Type': 'application/json' }
+  if (options.token) {
+    headers['Authorization'] = `Bearer ${options.token}`
+  }
+
+  const response = await fetch(
+    `${getApiUrl()}/onboarding/${encodeURIComponent(employeeId)}/documents/${encodeURIComponent(stepId)}`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(payload)
+    }
+  )
+
+  if (!response.ok) {
+    const errorText = await response.text().catch(() => '')
+    throw new Error(`Failed to store document metadata (${response.status}): ${errorText}`)
+  }
+
+  const data = await response.json()
+  return {
+    success: Boolean(data?.success ?? true),
+    document_metadata: data?.data?.document_metadata ?? null
+  }
+}
+
+export async function listStepDocuments(
+  employeeId: string,
+  stepId: string,
+  token: string
+): Promise<Array<StepDocumentMetadata & { id?: string }>> {
+  const params = new URLSearchParams({ token })
+  const response = await fetch(
+    `${getApiUrl()}/onboarding/${encodeURIComponent(employeeId)}/documents/${encodeURIComponent(stepId)}/list?${params.toString()}`,
+    {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' }
+    }
+  )
+
+  if (!response.ok) {
+    throw new Error(`Failed to list step documents (${response.status})`)
+  }
+
+  const payload = await response.json()
+  return payload?.data?.documents ?? []
+}

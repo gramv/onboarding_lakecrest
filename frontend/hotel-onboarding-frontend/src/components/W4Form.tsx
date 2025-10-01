@@ -302,8 +302,8 @@ export default function W4Form({ onSubmit, ocrData = {}, language = 'en' }: W4Fo
           <h2 className="text-xl font-bold text-gray-900 mb-2">Step 1: Enter Personal Information</h2>
           <p className="text-sm text-gray-700">Complete this step to ensure accurate tax withholding calculations.</p>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <Label htmlFor="first_name" className="text-sm">First Name *</Label>
             <Input
@@ -365,8 +365,8 @@ export default function W4Form({ onSubmit, ocrData = {}, language = 'en' }: W4Fo
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-          <div className="md:col-span-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+          <div className="sm:col-span-2 md:col-span-2">
             <Label htmlFor="address" className="text-sm">Address *</Label>
             <Input
               id="address"
@@ -403,8 +403,8 @@ export default function W4Form({ onSubmit, ocrData = {}, language = 'en' }: W4Fo
             />
           </div>
         </div>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
             <Label htmlFor="zip_code" className="text-sm">ZIP Code *</Label>
             <Input

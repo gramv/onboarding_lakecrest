@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react'
-import { getApiUrl, getLegacyBaseUrl } from '@/config/api'
-import { Button } from '@/components/ui/button'
+import { getApiUrl } from '@/config/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import DigitalSignatureCapture from '@/components/DigitalSignatureCapture'
 import ReviewAndSign from '@/components/ReviewAndSign'
-import { CheckCircle, Building, FileText, ScrollText, PenTool, Check, Shield, Briefcase, Lock, Heart, ArrowRight, ArrowLeft } from 'lucide-react'
+import { CheckCircle, Building, FileText, ScrollText, PenTool, Check, Shield, Briefcase, Lock, Heart, AlertCircle } from 'lucide-react'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import PDFViewer from '@/components/PDFViewer'
 import { StepContainer } from '@/components/onboarding/StepContainer'
@@ -17,6 +17,10 @@ import { useAutoSave } from '@/hooks/useAutoSave'
 import { useStepValidation } from '@/hooks/useStepValidation'
 import { companyPoliciesValidator } from '@/utils/stepValidators'
 import { scrollToTop } from '@/utils/scrollHelpers'
+import { fetchStepDocumentMetadata, listStepDocuments, StepDocumentMetadata } from '@/services/documentService'
+import StepNavigator from '@/components/navigation/StepNavigator'
+import { StepStatus } from '@/types/onboarding'
+import { cn } from '@/lib/utils'
 
 // Helper component to render formatted text with bold markdown and HTML tables
 const FormattedPolicyText = ({ text, className = '' }: { text: string; className?: string }) => {
@@ -315,11 +319,16 @@ export default function CompanyPoliciesStep({
   progress,
   markStepComplete,
   saveProgress,
+  completeAndAdvance,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
   property,
   isSingleStepMode = false,
-  singleStepMeta
+  singleStepMeta,
+  sessionToken,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   // Section state - progressive flow
@@ -332,7 +341,58 @@ export default function CompanyPoliciesStep({
   const [acknowledgmentChecked, setAcknowledgmentChecked] = useState(false)
   const [isSigned, setIsSigned] = useState(false)
   const [signatureData, setSignatureData] = useState(null)
-  const [signedPdfUrl, setSignedPdfUrl] = useState<string | null>(null)
+  const [documentMetadata, setDocumentMetadata] = useState<StepDocumentMetadata | null>(null)
+  const [remotePdfUrl, setRemotePdfUrl] = useState<string | null>(null)
+  const [inlinePdfData, setInlinePdfData] = useState<string | null>(null)
+  const [metadataLoading, setMetadataLoading] = useState(false)
+  const [metadataError, setMetadataError] = useState<string | null>(null)
+  const [metadataRequested, setMetadataRequested] = useState(false)
+
+  const hrContactEmail = singleStepMeta?.hrContactEmail || singleStepMeta?.hr_contact_email
+
+  const employeeIdEncoded = React.useMemo(() => {
+    if (!employee?.id) {
+      return null
+    }
+    try {
+      return encodeURIComponent(employee.id)
+    } catch (error) {
+      console.error('CompanyPolicies: failed to encode employee id for PDF endpoint', error)
+      return null
+    }
+  }, [employee?.id])
+
+  const pdfGenerationEndpoint = React.useMemo(() => {
+    if (!employeeIdEncoded) {
+      return null
+    }
+    return `${getApiUrl()}/onboarding/${employeeIdEncoded}/company-policies/generate-pdf`
+  }, [employeeIdEncoded])
+
+  const notifySingleStepCompletion = async (pdfBase64: string | null) => {
+    if (!isSingleStepMode || !employee?.id || !pdfBase64) {
+      return
+    }
+
+    try {
+      await fetch(`${getApiUrl()}/onboarding/single-step/notify-completion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_id: employee.id,
+          step_id: currentStep.id,
+          step_name: currentStep.name,
+          pdf_data: pdfBase64,
+          property_id: property?.id,
+          session_id: singleStepMeta?.sessionId,
+          hr_email: hrContactEmail,
+          recipient_email: singleStepMeta?.recipientEmail || undefined
+        })
+      })
+    } catch (error) {
+      console.error('Failed to notify HR about company policies completion:', error)
+    }
+  }
 
   // Section completion state
   const [section1Complete, setSection1Complete] = useState(false)
@@ -386,6 +446,8 @@ export default function CompanyPoliciesStep({
     acknowledgmentChecked,
     isSigned,
     signatureData,
+    documentMetadata,
+    inlinePdfData,
     section1Complete,
     section2Complete,
     section3Complete,
@@ -408,7 +470,6 @@ export default function CompanyPoliciesStep({
 
   // Load existing data
   useEffect(() => {
-    // Load saved data first
     const savedData = sessionStorage.getItem(`onboarding_${currentStep.id}_data`)
     if (savedData) {
       try {
@@ -420,18 +481,56 @@ export default function CompanyPoliciesStep({
         setEeoInitials(parsed.eeoInitials || '')
         setAcknowledgmentChecked(parsed.acknowledgmentChecked || false)
         setSignatureData(parsed.signatureData || null)
-        setIsSigned(parsed.isSigned || false)
-        // Restore completion states - these are the important ones for navigation
-        setSection1Complete(parsed.section1Complete || false)
-        setSection2Complete(parsed.section2Complete || false)
-        setSection3Complete(parsed.section3Complete || false)
-        setSection4Complete(parsed.section4Complete || false)
-        setSection5Complete(parsed.section5Complete || false)
+
+        // Restore document metadata and PDF URL if available
+        if (parsed.documentMetadata) {
+          setDocumentMetadata(parsed.documentMetadata as StepDocumentMetadata)
+          if (parsed.documentMetadata?.signed_url) {
+            setRemotePdfUrl(parsed.documentMetadata.signed_url as string)
+            console.log('Restored PDF URL from metadata:', parsed.documentMetadata.signed_url)
+          }
+        }
+
+        // Also check for remotePdfUrl directly saved
+        if (parsed.remotePdfUrl) {
+          setRemotePdfUrl(parsed.remotePdfUrl as string)
+          console.log('Restored remote PDF URL:', parsed.remotePdfUrl)
+        }
+
+        // Legacy storage of signedPdfUrl (base64 or URL)
+        if (parsed.signedPdfUrl) {
+          const legacyValue = parsed.signedPdfUrl as string
+          if (legacyValue.startsWith('http')) {
+            setRemotePdfUrl(legacyValue)
+          } else {
+            setInlinePdfData(legacyValue)
+          }
+        }
+
+        const derivedSigned = Boolean(parsed.isSigned || parsed.signatureData || parsed.documentMetadata?.signed_url || parsed.remotePdfUrl)
+        setIsSigned(derivedSigned)
+
+        const section1 = validateInitials(parsed.companyPoliciesInitials || '', 'Company Policies') === true
+        const section2 = validateInitials(parsed.eeoInitials || '', 'EEO') === true
+        const section3 = validateInitials(parsed.sexualHarassmentInitials || '', 'Sexual Harassment') === true
+        const section4 = Boolean(parsed.acknowledgmentChecked)
+        const section5 = Boolean(parsed.section5Complete || (derivedSigned && section4))
+
+        setSection1Complete(section1)
+        setSection2Complete(section2)
+        setSection3Complete(section3)
+        setSection4Complete(section4)
+        setSection5Complete(section5)
+
+        if (section1 && section2 && section3 && section4 && section5 && derivedSigned) {
+          setCurrentSection(5)
+        }
       } catch (e) {
         console.warn('Failed to parse saved company policies data:', e)
       }
     } else if (progress.completedSteps.includes(currentStep.id)) {
       // Only set all complete if no saved data exists but step is marked complete
+      // Note: We don't have the PDF URL here, so the PDF won't display until re-signed
       setIsSigned(true)
       setSection5Complete(true)
       setSection4Complete(true)
@@ -442,63 +541,86 @@ export default function CompanyPoliciesStep({
     }
   }, [currentStep.id, progress.completedSteps])
 
-  // Handle section navigation
-  const handleSectionContinue = () => {
-    switch (currentSection) {
-      case 1:
-        // Validate initials for section 1
-        if (validateInitials(companyPoliciesInitials, 'Company Policies') === true) {
-          setSection1Complete(true)
-          setCurrentSection(2)
-        } else {
-          alert('Please provide valid initials for the Company Policies section')
-          return
-        }
-        break
-      case 2:
-        // Validate initials for section 2
-        if (validateInitials(eeoInitials, 'EEO') === true) {
-          setSection2Complete(true)
-          setCurrentSection(3)
-        } else {
-          alert('Please provide valid initials for the Equal Employment Opportunity section')
-          return
-        }
-        break
-      case 3:
-        // Validate initials for section 3
-        if (validateInitials(sexualHarassmentInitials, 'Sexual Harassment') === true) {
-          setSection3Complete(true)
-          setCurrentSection(4)
-        } else {
-          alert('Please provide valid initials for the Sexual Harassment section')
-          return
-        }
-        break
-      case 4:
-        setSection4Complete(true)
-        setCurrentSection(5)
-        break
-      case 5:
-        setSection5Complete(true)
-        break
-    }
-    scrollToTop()
-  }
+  useEffect(() => {
+    setMetadataRequested(false)
+  }, [sessionToken, currentStep.id, employee?.id])
 
-  // Handle going back to previous section
-  const handleSectionBack = () => {
-    if (currentSection > 1) {
-      setCurrentSection(currentSection - 1)
-      scrollToTop()
+  // Fetch latest document metadata from backend when available
+  useEffect(() => {
+    if (!sessionToken || !employee?.id) {
+      return
     }
-  }
+
+    // Skip if we've already requested and have the data
+    if (metadataRequested && documentMetadata?.signed_url) {
+      return
+    }
+
+    // Always fetch if step is complete or we don't have the PDF URL yet
+    const shouldFetch = progress.completedSteps.includes(currentStep.id) ||
+                        !remotePdfUrl ||
+                        (isSigned && !documentMetadata?.signed_url)
+
+    if (!shouldFetch) {
+      return
+    }
+
+    let isMounted = true
+    setMetadataRequested(true)
+    setMetadataLoading(true)
+    setMetadataError(null)
+
+    fetchStepDocumentMetadata(employee.id, currentStep.id, sessionToken)
+      .then(response => {
+        if (!isMounted) {
+          return
+        }
+        if (response.document_metadata) {
+          setDocumentMetadata(response.document_metadata)
+          if (response.document_metadata.signed_url) {
+            setRemotePdfUrl(response.document_metadata.signed_url)
+          }
+        }
+        return listStepDocuments(employee.id, currentStep.id, sessionToken)
+      })
+      .then(documents => {
+        if (!isMounted) {
+          return
+        }
+        if ((!documents || documents.length === 0) && !remotePdfUrl && !inlinePdfData) {
+          setMetadataError('Document file missing from storage')
+        }
+      })
+      .catch(error => {
+        if (isMounted) {
+          if (process.env.NODE_ENV === 'development' && !(error instanceof Error && error.message.includes('404'))) {
+            console.warn('CompanyPolicies: metadata fetch error', error)
+          }
+          // Treat 404 as "no documents yet" without logging an error state
+          if (error instanceof Error) {
+            if (!error.message.includes('404')) {
+              setMetadataError(error.message)
+            }
+          }
+        }
+      })
+      .finally(() => {
+        if (isMounted) {
+          setMetadataLoading(false)
+        }
+      })
+
+    return () => {
+      isMounted = false
+    }
+  }, [sessionToken, employee?.id, currentStep.id, progress.completedSteps, metadataRequested, documentMetadata?.signed_url, remotePdfUrl, isSigned])
+
 
   // Handle signature completion
   const handleSignature = async (signature) => {
     setSignatureData(signature)
     setIsSigned(true)
-    
+
     // Check if all fields are valid
     const companyValidation = validateInitials(companyPoliciesInitials, 'Company Policies')
     const eeoValidation = validateInitials(eeoInitials, 'EEO')
@@ -507,7 +629,7 @@ export default function CompanyPoliciesStep({
     if (companyValidation === true && eeoValidation === true && shValidation === true && acknowledgmentChecked) {
       const completeData = {
         ...formData,
-        signatureData: signature,
+        signatureData: signature, // Use original signature
         isSigned: true,
         completedAt: new Date().toISOString()
       }
@@ -524,41 +646,86 @@ export default function CompanyPoliciesStep({
       }
       
       // Generate signed PDF
+      let generatedPdfBase64: string | null = null
+      let latestMetadata: StepDocumentMetadata | null = documentMetadata
+
       try {
-        const response = await fetch(`${getApiUrl()}/onboarding/${employee?.id || 'test-employee'}/company-policies/generate-pdf`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            employee_data: employee,
-            form_data: {
-              companyPoliciesInitials,
-              eeoInitials,
-              sexualHarassmentInitials,
-              acknowledgmentChecked,
-              ...completeData
+        if (!pdfGenerationEndpoint) {
+          console.error('CompanyPolicies: cannot generate PDF without employee id')
+        } else {
+          const response = await fetch(pdfGenerationEndpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
             },
-            signature_data: signature,
-            is_single_step: isSingleStepMode,
-            session_id: singleStepMeta?.sessionId
+            body: JSON.stringify({
+              employee_data: employee,
+              form_data: {
+                companyPoliciesInitials,
+                eeoInitials,
+                sexualHarassmentInitials,
+                acknowledgmentChecked,
+                ...completeData
+              },
+              signature_data: signature, // Use original signature
+              is_single_step: isSingleStepMode,
+              session_id: singleStepMeta?.sessionId
+            })
           })
-        })
-        
-        if (response.ok) {
-          const data = await response.json()
-          if (data.data?.pdf) {
-            setSignedPdfUrl(data.data.pdf)
+
+          if (response.ok) {
+            const data = await response.json()
+            if (data.data?.pdf) {
+              generatedPdfBase64 = data.data.pdf
+              setInlinePdfData(data.data.pdf)
+            }
+
+            if (data.data?.document_metadata) {
+              latestMetadata = data.data.document_metadata as StepDocumentMetadata
+              setDocumentMetadata(latestMetadata)
+              setMetadataError(null)
+              if (latestMetadata.signed_url) {
+                setRemotePdfUrl(latestMetadata.signed_url)
+              }
+            }
+          } else {
+            console.error('CompanyPolicies: PDF generation response not OK', response.status)
           }
         }
       } catch (error) {
         console.error('Failed to generate signed PDF:', error)
       }
       
+      const persistedData = {
+        currentSection,
+        companyPoliciesInitials,
+        sexualHarassmentInitials,
+        eeoInitials,
+        acknowledgmentChecked,
+        isSigned: true,
+        signatureData: signature,
+        documentMetadata: latestMetadata,
+        inlinePdfData: inlinePdfData || generatedPdfBase64,
+        section1Complete: true,
+        section2Complete: true,
+        section3Complete: true,
+        section4Complete: true,
+        section5Complete: true,
+        allSectionsComplete: true,
+        isFormComplete: true,
+        remotePdfUrl: latestMetadata?.signed_url || remotePdfUrl || null,
+        pdfGeneratedAt: new Date().toISOString()
+      }
+
+      // Save to session storage immediately for offline access
+      sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(persistedData))
+
       // Save progress first to ensure data is stored
-      await saveProgress(currentStep.id, completeData)
+      await saveProgress(currentStep.id, persistedData)
       // Then mark as complete
-      await markStepComplete(currentStep.id, completeData)
+      await markStepComplete(currentStep.id, persistedData)
+
+      await notifySingleStepCompletion(generatedPdfBase64 || inlinePdfData)
     } else {
       const errorMessages = []
       if (companyValidation !== true) errorMessages.push(`Company Policies: ${companyValidation}`)
@@ -576,8 +743,40 @@ export default function CompanyPoliciesStep({
                         validateInitials(sexualHarassmentInitials, 'Sexual Harassment') === true && 
                         acknowledgmentChecked
   
-  const isStepComplete = isFormComplete && isSigned && section5Complete
+  const isStepComplete = isFormComplete && isSigned && (section5Complete || (isSigned && allSectionsComplete))
   const allSectionsComplete = section1Complete && section2Complete && section3Complete && section4Complete
+
+  // Helper function to check if a specific section is complete
+  const isSectionComplete = (sectionNum: number): boolean => {
+    switch (sectionNum) {
+      case 1: return section1Complete
+      case 2: return section2Complete
+      case 3: return section3Complete
+      case 4: return section4Complete
+      case 5: return true // Section 5 is the review section
+      default: return false
+    }
+  }
+
+  const getSectionStatus = (sectionNum: number): StepStatus => {
+    if (isSectionComplete(sectionNum)) {
+      return 'complete'
+    }
+
+    if (currentSection === sectionNum) {
+      return 'in-progress'
+    }
+
+    const prerequisiteComplete = sectionNum === 1 || isSectionComplete(sectionNum - 1)
+    return prerequisiteComplete ? 'ready' : 'locked'
+  }
+
+  const overallStepStatus: StepStatus = currentSection < 5
+    ? getSectionStatus(currentSection)
+    : (isStepComplete ? 'complete' : 'in-progress')
+
+  const saving = Boolean(saveStatus?.saving)
+  const hasErrors = Array.isArray(errors) && errors.length > 0
 
   const translations = {
     en: {
@@ -610,6 +809,7 @@ export default function CompanyPoliciesStep({
       completionMessage: 'Thank you for reviewing and accepting our company policies.',
       incompleteTitle: 'Complete All Requirements',
       toProceeed: 'To proceed, please complete all sections and requirements.',
+      continueToNext: 'Continue to W-4 Tax Form',
       confidentialHotlineTitle: 'Confidential Associate Hotline',
       acknowledgmentSectionTitle: 'ACKNOWLEDGEMENT OF RECEIPT'
     },
@@ -643,12 +843,51 @@ export default function CompanyPoliciesStep({
       completionMessage: 'Gracias por revisar y aceptar nuestras políticas de la empresa.',
       incompleteTitle: 'Complete Todos los Requisitos',
       toProceeed: 'Para continuar, por favor complete todas las secciones y requisitos.',
+      continueToNext: 'Continuar al formulario W-4',
       confidentialHotlineTitle: 'Línea Directa Confidencial del Asociado',
       acknowledgmentSectionTitle: 'RECONOCIMIENTO DE RECIBO'
     }
   }
 
   const t = translations[language]
+
+  const sectionNavigatorConfig = [
+    {
+      id: 'section1',
+      title: t.section1Title,
+      description: t.section1Desc,
+      status: getSectionStatus(1),
+      icon: <Shield className="h-4 w-4" />
+    },
+    {
+      id: 'section2',
+      title: t.section2Title,
+      description: t.section2Desc,
+      status: getSectionStatus(2),
+      icon: <Building className="h-4 w-4" />
+    },
+    {
+      id: 'section3',
+      title: t.section3Title,
+      description: t.section3Desc,
+      status: getSectionStatus(3),
+      icon: <Heart className="h-4 w-4" />
+    },
+    {
+      id: 'section4',
+      title: t.section4Title,
+      description: t.section4Desc,
+      status: getSectionStatus(4),
+      icon: <FileText className="h-4 w-4" />
+    },
+    {
+      id: 'section5',
+      title: t.section5Title,
+      description: t.section5Desc,
+      status: getSectionStatus(5),
+      icon: <PenTool className="h-4 w-4" />
+    }
+  ]
 
   // Get section icon and status
   const getSectionIcon = (sectionNum: number) => {
@@ -684,8 +923,18 @@ export default function CompanyPoliciesStep({
     }
   }
 
+  const handleSection1Complete = () => setSection1Complete(true)
+  const handleSection2Complete = () => setSection2Complete(true)
+  const handleSection3Complete = () => setSection3Complete(true)
+  const handleSection4Complete = () => setSection4Complete(true)
+  const handleSection5Complete = () => setSection5Complete(true)
+
   return (
-    <StepContainer errors={errors} saveStatus={saveStatus}>
+    <StepContainer
+      errors={errors}
+      saveStatus={saveStatus}
+      canProceed={isStepComplete}
+    >
       <StepContentWrapper>
         <div className="space-y-6">
         {/* Header */}
@@ -705,51 +954,66 @@ export default function CompanyPoliciesStep({
           </Alert>
         )}
 
-        {/* Progress indicator */}
-        <div className="flex items-center justify-center space-x-4 mb-6">
-          {[1, 2, 3, 4, 5].map((num) => {
-            const isComplete = (num === 1 && section1Complete) || 
-                             (num === 2 && section2Complete) || 
-                             (num === 3 && section3Complete) || 
-                             (num === 4 && section4Complete) || 
-                             (num === 5 && section5Complete)
-            const isClickable = num < currentSection || isComplete
-            
-            return (
-              <div key={num} className="flex items-center">
-                <div 
-                  className={`flex items-center justify-center w-8 h-8 rounded-full border-2 ${
-                    num === currentSection ? 'border-blue-600 bg-blue-50' :
-                    isComplete ? 'border-green-600 bg-green-50' :
-                    'border-gray-300 bg-gray-50'
-                  } ${isClickable ? 'cursor-pointer hover:scale-110 transition-transform' : ''}`}
+        <div className="space-y-3 rounded-2xl border border-blue-100 bg-blue-50 p-4">
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-blue-800">
+                {language === 'es' ? `Sección ${currentSection} de ${sectionNavigatorConfig.length}` : `Section ${currentSection} of ${sectionNavigatorConfig.length}`}
+              </p>
+              <p className="text-xs text-blue-600">
+                {sectionNavigatorConfig[currentSection - 1]?.title}
+              </p>
+            </div>
+            <div className="text-xs text-blue-700">
+              {isStepComplete
+                ? (language === 'es' ? 'Listo para continuar a W-4.' : 'All sections complete. Ready to continue.')
+                : (language === 'es'
+                    ? 'Complete cada sección para desbloquear el botón Siguiente.'
+                    : 'Complete each section to unlock Continue.')}
+            </div>
+          </div>
+          <div className="relative h-2 rounded-full bg-white/70">
+            <div
+              className="absolute left-0 top-0 h-2 rounded-full bg-blue-600 transition-all duration-300"
+              style={{ width: `${(currentSection / sectionNavigatorConfig.length) * 100}%` }}
+            />
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+            {sectionNavigatorConfig.map((section, index) => {
+              const isCurrent = index + 1 === currentSection
+              const isComplete = section.status === 'complete'
+              return (
+                <button
+                  key={section.id}
+                  type="button"
                   onClick={() => {
-                    if (isClickable) {
-                      setCurrentSection(num)
+                    if (index + 1 === currentSection) return
+                    if (index + 1 < currentSection || isSectionComplete(index)) {
+                      setCurrentSection(index + 1)
                       scrollToTop()
                     }
                   }}
+                  className={cn(
+                    'flex flex-col items-center rounded-xl border px-3 py-2 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+                    isCurrent ? 'border-blue-500 bg-white shadow-md' : 'border-transparent bg-blue-100/60 hover:bg-white',
+                    (index + 1 > currentSection && !isSectionComplete(index)) && 'cursor-not-allowed opacity-60'
+                  )}
+                  disabled={(index + 1 > currentSection && !isSectionComplete(index))}
+                  aria-current={isCurrent ? 'step' : undefined}
                 >
-                  <span className={`text-sm font-medium ${
-                    num === currentSection ? 'text-blue-600' :
-                    isComplete ? 'text-green-600' :
-                    'text-gray-400'
-                  }`}>
-                    {isComplete ? '✓' : num}
+                  <div className={cn(
+                    'flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold',
+                    isComplete ? 'bg-green-100 text-green-700 border border-green-300' : isCurrent ? 'bg-blue-600 text-white' : 'bg-white text-blue-500'
+                  )}>
+                    {isComplete ? <CheckCircle className="h-4 w-4" /> : index + 1}
+                  </div>
+                  <span className="mt-1 text-[11px] font-medium text-blue-800 line-clamp-2">
+                    {section.title.replace(/Section \d+:\s?/, '')}
                   </span>
-                </div>
-                {num < 5 && (
-                  <div className={`w-12 h-0.5 ml-2 ${
-                    (num === 1 && section1Complete) || 
-                    (num === 2 && section2Complete) || 
-                    (num === 3 && section3Complete) || 
-                    (num === 4 && section4Complete) 
-                    ? 'bg-green-300' : 'bg-gray-300'
-                  }`} />
-                )}
-              </div>
-            )
-          })}
+                </button>
+              )
+            })}
+          </div>
         </div>
 
         {/* Completion Alert */}
@@ -821,13 +1085,18 @@ export default function CompanyPoliciesStep({
                   </CardContent>
                 </Card>
 
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={handleSectionContinue}
-                    className="px-6 py-2"
+                <div className="flex justify-end gap-3">
+                  <Button
+                    onClick={() => {
+                      if (validateInitials(companyPoliciesInitials, 'Company Policies') === true) {
+                        handleSection1Complete()
+                        setCurrentSection(2)
+                        scrollToTop()
+                      }
+                    }}
+                    disabled={validateInitials(companyPoliciesInitials, 'Company Policies') !== true}
                   >
-                    <span>{t.continue}</span>
-                    <ArrowRight className="h-4 w-4 ml-2" />
+                    {language === 'es' ? 'Continuar a Sección 2' : 'Continue to Section 2'}
                   </Button>
                 </div>
               </CardContent>
@@ -887,27 +1156,33 @@ export default function CompanyPoliciesStep({
                 </Card>
 
                 <div className="flex justify-between">
-                  <Button 
-                    onClick={handleSectionBack}
-                    variant="outline"
-                    className="px-6 py-2"
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setCurrentSection(1)
+                      scrollToTop()
+                    }}
                   >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    <span>{t.back}</span>
+                    {language === 'es' ? 'Regresar a Sección 1' : 'Back to Section 1'}
                   </Button>
-                  <Button 
-                    onClick={handleSectionContinue}
-                    className="px-6 py-2"
+                  <Button
+                    onClick={() => {
+                      if (validateInitials(eeoInitials, 'EEO') === true) {
+                        handleSection2Complete()
+                        setCurrentSection(3)
+                        scrollToTop()
+                      }
+                    }}
+                    disabled={validateInitials(eeoInitials, 'EEO') !== true}
                   >
-                    <span>{t.continue}</span>
-                    <ArrowRight className="h-4 w-4 ml-2" />
+                    {language === 'es' ? 'Continuar a Sección 3' : 'Continue to Section 3'}
                   </Button>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Section 3: Sexual and Other Unlawful Harassment */}
+          {/* Section 3: Sexual Harassment Policy */}
           {currentSection === 3 && (
             <Card>
               <CardHeader>
@@ -934,13 +1209,13 @@ export default function CompanyPoliciesStep({
                         <FormattedPolicyText text={SEXUAL_HARASSMENT_POLICY.content} />
                       </div>
                     </div>
-                    
+
                     <div className="flex items-center space-x-4">
-                      <Label htmlFor="sh-initials" className="text-sm">
+                      <Label htmlFor="sexual-harassment-initials" className="text-sm">
                         {t.initialsLabel}
                       </Label>
                       <Input
-                        id="sh-initials"
+                        id="sexual-harassment-initials"
                         value={sexualHarassmentInitials}
                         onChange={(e) => setSexualHarassmentInitials(e.target.value.toUpperCase())}
                         placeholder={expectedInitials || "XX"}
@@ -960,20 +1235,26 @@ export default function CompanyPoliciesStep({
                 </Card>
 
                 <div className="flex justify-between">
-                  <Button 
-                    onClick={handleSectionBack}
-                    variant="outline"
-                    className="px-6 py-2"
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setCurrentSection(2)
+                      scrollToTop()
+                    }}
                   >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    <span>{t.back}</span>
+                    {language === 'es' ? 'Regresar a Sección 2' : 'Back to Section 2'}
                   </Button>
-                  <Button 
-                    onClick={handleSectionContinue}
-                    className="px-6 py-2"
+                  <Button
+                    onClick={() => {
+                      if (validateInitials(sexualHarassmentInitials, 'Sexual Harassment') === true) {
+                        handleSection3Complete()
+                        setCurrentSection(4)
+                        scrollToTop()
+                      }
+                    }}
+                    disabled={validateInitials(sexualHarassmentInitials, 'Sexual Harassment') !== true}
                   >
-                    <span>{t.continue}</span>
-                    <ArrowRight className="h-4 w-4 ml-2" />
+                    {language === 'es' ? 'Continuar a Sección 4' : 'Continue to Section 4'}
                   </Button>
                 </div>
               </CardContent>
@@ -994,22 +1275,24 @@ export default function CompanyPoliciesStep({
                 <div className="p-4 bg-gray-50 rounded-lg mb-6">
                   <FormattedPolicyText text={CONFIDENTIAL_HOTLINE_TEXT} />
                 </div>
-
                 <div className="flex justify-between">
-                  <Button 
-                    onClick={handleSectionBack}
-                    variant="outline"
-                    className="px-6 py-2"
+                  <Button
+                    variant="ghost"
+                    onClick={() => {
+                      setCurrentSection(3)
+                      scrollToTop()
+                    }}
                   >
-                    <ArrowLeft className="h-4 w-4 mr-2" />
-                    <span>{t.back}</span>
+                    {language === 'es' ? 'Regresar a Sección 3' : 'Back to Section 3'}
                   </Button>
-                  <Button 
-                    onClick={handleSectionContinue}
-                    className="px-6 py-2"
+                  <Button
+                    onClick={() => {
+                      handleSection4Complete()
+                      setCurrentSection(5)
+                      scrollToTop()
+                    }}
                   >
-                    <span>{t.continue}</span>
-                    <ArrowRight className="h-4 w-4 ml-2" />
+                    {language === 'es' ? 'Continuar a Sección 5' : 'Continue to Section 5'}
                   </Button>
                 </div>
               </CardContent>
@@ -1042,7 +1325,12 @@ export default function CompanyPoliciesStep({
                       <Checkbox
                         id="acknowledgment"
                         checked={acknowledgmentChecked}
-                        onCheckedChange={(checked) => setAcknowledgmentChecked(checked as boolean)}
+                        onCheckedChange={(checked) => {
+                          setAcknowledgmentChecked(checked as boolean)
+                          if (checked) {
+                            handleSection5Complete()
+                          }
+                        }}
                         className="mt-1"
                       />
                       <Label htmlFor="acknowledgment" className="text-sm leading-relaxed cursor-pointer">
@@ -1075,20 +1363,46 @@ export default function CompanyPoliciesStep({
                     'I have provided my initials on required sections'
                   ]}
                   language={language}
-                  usePDFPreview={true}
-                  pdfEndpoint={`${getApiUrl()}/onboarding/${employee?.id || 'test-employee'}/company-policies/generate-pdf`}
+                  usePDFPreview={Boolean(pdfGenerationEndpoint)}
+                  pdfEndpoint={pdfGenerationEndpoint || undefined}
                 />
               )}
 
+              {/* Prompt to re-sign if step is complete but no PDF */}
+              {isSigned && !remotePdfUrl && !documentMetadata?.signed_url && !inlinePdfData && (
+                <Alert className="bg-yellow-50 border-yellow-200">
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-800">
+                    <div className="space-y-2">
+                      <p className="font-medium">
+                        {language === 'es'
+                          ? 'El documento firmado no está disponible. Por favor, vuelva a firmar las políticas.'
+                          : 'The signed document is not available. Please sign the policies again.'}
+                      </p>
+                      <button
+                        onClick={() => {
+                          setIsSigned(false)
+                          setCurrentSection(5)
+                          sessionStorage.removeItem(`onboarding_${currentStep.id}_data`)
+                        }}
+                        className="text-sm text-yellow-700 underline hover:text-yellow-800"
+                      >
+                        {language === 'es' ? 'Haga clic aquí para volver a firmar' : 'Click here to re-sign'}
+                      </button>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* Show signed PDF preview */}
-              {isSigned && signedPdfUrl && (
+              {isSigned && (remotePdfUrl || documentMetadata?.signed_url || inlinePdfData) && (
                 <div className="space-y-6">
                   <Alert className="bg-green-50 border-green-200">
                     <CheckCircle className="h-4 w-4 text-green-600" />
                     <AlertDescription className="text-green-800">
                       <div className="space-y-2">
                         <p className="font-medium">
-                          {language === 'es' 
+                          {language === 'es'
                             ? 'Las políticas de la empresa han sido firmadas y guardadas exitosamente.'
                             : 'Company policies have been signed and saved successfully.'}
                         </p>
@@ -1099,13 +1413,30 @@ export default function CompanyPoliciesStep({
                             )}
                           </div>
                         )}
+                        {documentMetadata && (
+                          <div className="text-xs text-gray-600 space-y-1">
+                            {documentMetadata.filename && (
+                              <p>Stored file: {documentMetadata.filename}</p>
+                            )}
+                            {documentMetadata.generated_at && (
+                              <p>Generated: {new Date(documentMetadata.generated_at).toLocaleString()}</p>
+                            )}
+                          </div>
+                        )}
+                        {metadataError && (
+                          <p className="text-xs text-amber-600">{metadataError}</p>
+                        )}
+                        {metadataLoading && !metadataError && (
+                          <p className="text-xs text-gray-500">Refreshing stored document link...</p>
+                        )}
                       </div>
                     </AlertDescription>
                   </Alert>
-                  
-                  <PDFViewer 
-                    pdfData={signedPdfUrl} 
-                    height="600px" 
+
+                  <PDFViewer
+                    pdfUrl={remotePdfUrl || documentMetadata?.signed_url || undefined}
+                    pdfData={!remotePdfUrl && !documentMetadata?.signed_url ? inlinePdfData ?? undefined : undefined}
+                    height="600px"
                     title="Signed Company Policies"
                   />
                 </div>
@@ -1146,20 +1477,15 @@ export default function CompanyPoliciesStep({
                   </CardContent>
                 </Card>
               )}
-
-              <div className="flex justify-start">
-                <Button 
-                  onClick={handleSectionBack}
-                  variant="outline"
-                  className="px-6 py-2"
-                >
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  <span>{t.back}</span>
-                </Button>
-              </div>
             </div>
           )}
         </div>
+
+        {!isStepComplete && (
+          <div className="mt-6 text-xs text-blue-700 text-center">
+            Complete all five sections, provide required initials, and sign to continue.
+          </div>
+        )}
         </div>
       </StepContentWrapper>
     </StepContainer>

@@ -3,7 +3,7 @@
  * Implements Phase 1: Core Infrastructure from candidate-onboarding-flow spec
  */
 
-import { OnboardingStep, OnboardingSession, OnboardingProgress } from '../types/onboarding'
+import { OnboardingStep, OnboardingSession, OnboardingProgress, StepStatus } from '../types/onboarding'
 import { AutoSaveManager } from '../utils/AutoSaveManager'
 import { stepValidators } from '../utils/stepValidators'
 import { ValidationResult } from '../hooks/useStepValidation'
@@ -42,6 +42,14 @@ export interface OnboardingFlowSession {
   savedFormData?: Record<string, any>
 }
 
+export interface NavigationValidationResult {
+  allowed: boolean
+  reason?: string
+  warnings?: string[]
+  missing_requirements?: string[]
+  fallback?: boolean
+}
+
 export interface StepProps {
   // Current step info
   currentStep: {
@@ -55,8 +63,10 @@ export interface StepProps {
   progress: {
     completedSteps: string[]
     currentStepIndex: number
+    currentStepId?: string
     totalSteps: number
     percentComplete: number
+    stepStates?: Record<string, StepStatus>
   }
   
   // Actions
@@ -64,6 +74,14 @@ export interface StepProps {
   saveProgress: (stepId: string, data?: any) => Promise<void>
   goToNextStep: () => void
   goToPreviousStep: () => void
+  goToStep?: (stepIndex: number) => void
+  advanceToNextStep?: () => Promise<NavigationValidationResult>
+  completeAndAdvance?: (data?: any, options?: { skipValidation?: boolean; resumeAnchor?: string | null }) => Promise<NavigationValidationResult>
+  canProceedToNext?: boolean
+  getStepState?: (stepId: string) => StepStatus
+  stepStates?: Record<string, StepStatus>
+  setStepResumeAnchor?: (stepId: string, anchor: string | null) => void
+  getStepResumeAnchor?: (stepId: string) => string | null
   
   // Data
   language: 'en' | 'es'
@@ -85,6 +103,8 @@ export class OnboardingFlowController {
   private currentStepIndex: number = 0
   private stepData: Record<string, any> = {}
   private stepErrors: Record<string, string[]> = {}
+  private stepStates: Record<string, StepStatus> = {}
+  private stepRuntimeMeta: Record<string, { resumeAnchor?: string | null }> = {}
   
   // Define the onboarding steps - aligned with the spec
   // Note: Emergency contacts are handled as a tab within personal-info step
@@ -113,6 +133,135 @@ export class OnboardingFlowController {
     // Use API URL with /api prefix for all endpoints
     this.apiUrl = getApiUrl()
     this.steps = [...this.baseSteps]
+  }
+
+  private recomputeProgressMetadata(): void {
+    if (!this.session) {
+      return
+    }
+
+    const totalSteps = this.steps.length
+    const validStepIds = new Set(this.steps.map(step => step.id))
+    const uniqueCompleted = Array.from(new Set(this.session.progress.completedSteps || [])).filter(stepId => validStepIds.has(stepId))
+
+    Object.keys(this.stepRuntimeMeta).forEach(stepId => {
+      if (!validStepIds.has(stepId)) {
+        delete this.stepRuntimeMeta[stepId]
+      }
+    })
+
+    this.session.progress.completedSteps = uniqueCompleted
+    this.session.progress.totalSteps = totalSteps
+    this.session.progress.currentStepIndex = Math.min(this.currentStepIndex, Math.max(totalSteps - 1, 0))
+    this.session.progress.currentStepId = this.steps[this.session.progress.currentStepIndex]?.id
+    this.session.progress.percentComplete = totalSteps === 0
+      ? 0
+      : Math.round((uniqueCompleted.length / totalSteps) * 100)
+    this.session.progress.canProceed = this.canProceedToNextStep()
+
+    this.stepStates = this.computeStepStates()
+    this.session.progress.stepStates = { ...this.stepStates }
+  }
+
+  private computeStepStates(): Record<string, StepStatus> {
+    if (!this.session) {
+      return {}
+    }
+
+    const completed = new Set(this.session.progress.completedSteps || [])
+    const states: Record<string, StepStatus> = {}
+
+    this.steps.forEach((step, index) => {
+      if (completed.has(step.id)) {
+        states[step.id] = 'complete'
+        return
+      }
+
+      const dependencies = this.getStepDependencies(step, index)
+      const dependenciesSatisfied = dependencies.every(depId => completed.has(depId))
+
+      if (!dependenciesSatisfied) {
+        states[step.id] = 'locked'
+        return
+      }
+
+      if (index === this.currentStepIndex) {
+        states[step.id] = 'in-progress'
+        return
+      }
+
+      states[step.id] = 'ready'
+    })
+
+    return states
+  }
+
+  private getStepDependencies(step: OnboardingStep, index: number): string[] {
+    if (Array.isArray(step.dependencies) && step.dependencies.length > 0) {
+      return step.dependencies
+    }
+
+    if (index <= 0) {
+      return []
+    }
+
+    const priorRequiredSteps = this.steps.slice(0, index).filter(prevStep => prevStep.required)
+    return priorRequiredSteps.map(prevStep => prevStep.id)
+  }
+
+  private shouldSkipRemoteNavigationValidation(): boolean {
+    if (!this.session) {
+      return true
+    }
+
+    if (this.isSingleStepMode) {
+      return true
+    }
+
+    if (!this.session.sessionToken) {
+      return true
+    }
+
+    if (this.session.sessionToken === 'demo-token' || this.session.employee.id === 'demo-employee-001') {
+      return true
+    }
+
+    return false
+  }
+
+  private buildNavigationValidationPayload(nextStepId: string): Record<string, any> {
+    if (!this.session) {
+      return {}
+    }
+
+    return {
+      employee_id: this.session.employee.id,
+      current_step: this.getCurrentStep().id,
+      next_step: nextStepId,
+      completed_steps: this.session.progress.completedSteps,
+      is_single_step: this.isSingleStepMode,
+      timestamp: new Date().toISOString()
+    }
+  }
+
+  getStepStates(): Record<string, StepStatus> {
+    return { ...this.stepStates }
+  }
+
+  getStepState(stepId: string): StepStatus {
+    return this.stepStates[stepId] || 'locked'
+  }
+
+  setStepResumeAnchor(stepId: string, anchor: string | null): void {
+    const existing = this.stepRuntimeMeta[stepId] || {}
+    this.stepRuntimeMeta[stepId] = {
+      ...existing,
+      resumeAnchor: anchor ?? null
+    }
+  }
+
+  getStepResumeAnchor(stepId: string): string | null {
+    return this.stepRuntimeMeta[stepId]?.resumeAnchor ?? null
   }
 
   /**
@@ -203,6 +352,7 @@ export class OnboardingFlowController {
 
         this.session = mockSession
         this.currentStepIndex = 0
+        this.recomputeProgressMetadata()
         return this.session
       }
 
@@ -216,21 +366,40 @@ export class OnboardingFlowController {
 
         const result = await response.json()
         const sessionData = result.data || result
-        
+
+        const rawProgress = sessionData.progress || {}
+
+        const initialProgress: OnboardingProgress = {
+          currentStepIndex: rawProgress.currentStepIndex ?? rawProgress.current_step_index ?? 0,
+          totalSteps: this.steps.length,
+          completedSteps: Array.isArray(rawProgress.completedSteps)
+            ? rawProgress.completedSteps
+            : Array.isArray(rawProgress.completed_steps)
+            ? rawProgress.completed_steps
+            : [],
+          percentComplete: rawProgress.percentComplete ?? rawProgress.percent_complete ?? 0,
+          canProceed: true,
+          currentStepId: rawProgress.currentStepId ?? rawProgress.current_step_id,
+          stepStates: rawProgress.stepStates ?? rawProgress.step_states
+        }
+
         this.session = {
           employee: sessionData.employee,
           property: sessionData.property,
           progress: {
-            ...sessionData.progress,
-            canProceed: true
+            ...initialProgress
           },
           sessionToken: token,
           expiresAt: new Date(sessionData.expiresAt),
           savedFormData: sessionData.savedFormData || {}
         }
 
+        this.hydrateCompletedStepsFromSavedData(this.session.savedFormData)
+
         // Set current step index based on progress
         this.currentStepIndex = this.session.progress.currentStepIndex || 0
+
+        this.recomputeProgressMetadata()
 
         return this.session
         
@@ -244,6 +413,50 @@ export class OnboardingFlowController {
       console.error('Failed to initialize onboarding session:', error)
       throw error
     }
+  }
+
+  private hydrateCompletedStepsFromSavedData(savedFormData?: Record<string, any> | null): void {
+    if (!this.session || !savedFormData) {
+      return
+    }
+
+    const ensureComplete = (stepId: string, condition: boolean) => {
+      if (!condition) return
+      if (!this.session!.progress.completedSteps.includes(stepId)) {
+        this.session!.progress.completedSteps.push(stepId)
+      }
+    }
+
+    const isPersonalInfoComplete = (data: any): boolean => {
+      if (!data) return false
+      if (data.stepComplete || data.completed || data.isComplete) return true
+      const personal = data.personalInfo
+      const emergency = data.emergencyContacts
+      return Boolean(personal && emergency && (personal.firstName || personal.lastName) && emergency.primaryContact?.name)
+    }
+
+    const generalCompletion = (data: any): boolean => {
+      if (!data) return false
+      return Boolean(
+        data.stepComplete ||
+        data.completed ||
+        data.isComplete ||
+        data.isSigned ||
+        data.completedAt
+      )
+    }
+
+    ensureComplete('welcome', Boolean(savedFormData['welcome']?.welcomeAcknowledged ?? savedFormData['welcome']?.formData?.welcomeAcknowledged))
+    ensureComplete('personal-info', isPersonalInfoComplete(savedFormData['personal-info']))
+    ensureComplete('job-details', Boolean(savedFormData['job-details']?.acknowledged))
+    ensureComplete('company-policies', Boolean(savedFormData['company-policies']?.isSigned))
+    ensureComplete('i9-complete', Boolean(savedFormData['i9-complete']?.isSigned))
+    ensureComplete('w4-form', generalCompletion(savedFormData['w4-form']))
+    ensureComplete('direct-deposit', generalCompletion(savedFormData['direct-deposit']))
+    ensureComplete('health-insurance', generalCompletion(savedFormData['health-insurance']))
+
+    const savedCompleted = Array.isArray(savedFormData.completedSteps) ? savedFormData.completedSteps : []
+    savedCompleted.forEach((stepId: string) => ensureComplete(stepId, true))
   }
 
   /**
@@ -327,6 +540,8 @@ export class OnboardingFlowController {
       })
     }
 
+    this.recomputeProgressMetadata()
+
     return this.session
   }
 
@@ -338,16 +553,27 @@ export class OnboardingFlowController {
       throw new Error('Session not initialized')
     }
 
-    const completedSteps = this.session.progress.completedSteps || []
-    const totalSteps = this.steps.length
-    const percentComplete = Math.round((completedSteps.length / totalSteps) * 100)
+    this.recomputeProgressMetadata()
+
+    const {
+      currentStepIndex,
+      completedSteps,
+      totalSteps,
+      percentComplete,
+      canProceed,
+      stepStates,
+      currentStepId
+    } = this.session.progress
 
     return {
-      currentStepIndex: this.currentStepIndex,
+      currentStepIndex,
+      currentStepId,
       totalSteps,
-      completedSteps,
+      completedSteps: [...completedSteps],
       percentComplete,
-      canProceed: this.canProceedToNextStep()
+      canProceed,
+      stepStates: stepStates ? { ...stepStates } : { ...this.stepStates },
+      formData: this.session.progress.formData
     }
   }
 
@@ -369,6 +595,8 @@ export class OnboardingFlowController {
       if (!this.session.progress.completedSteps.includes(stepId)) {
         this.session.progress.completedSteps.push(stepId)
       }
+
+      this.recomputeProgressMetadata()
 
       // Save completion status to sessionStorage (as backup)
       const completionKey = `onboarding_${stepId}_completed`
@@ -488,6 +716,121 @@ export class OnboardingFlowController {
   goToNextStep(): void {
     if (this.canProceedToNextStep()) {
       this.currentStepIndex = Math.min(this.currentStepIndex + 1, this.steps.length - 1)
+      this.recomputeProgressMetadata()
+    }
+  }
+
+  /**
+   * Advance to next step with validation result
+   * Returns NavigationValidationResult for compatibility with OnboardingFlowPortal
+   */
+  async advanceToNextStep(): Promise<NavigationValidationResult> {
+    if (!this.session) {
+      return {
+        allowed: false,
+        reason: 'Session not initialized'
+      }
+    }
+
+    this.recomputeProgressMetadata()
+
+    const currentStep = this.getCurrentStep()
+    const nextIndex = this.currentStepIndex + 1
+
+    if (nextIndex >= this.steps.length) {
+      return {
+        allowed: false,
+        reason: 'You have reached the final step of the onboarding process'
+      }
+    }
+
+    if (currentStep.required && !this.session.progress.completedSteps.includes(currentStep.id)) {
+      return {
+        allowed: false,
+        reason: `Please complete "${currentStep.name}" before proceeding`,
+        missing_requirements: [currentStep.name]
+      }
+    }
+
+    if (!this.canProceedToNextStep()) {
+      return {
+        allowed: false,
+        reason: 'Cannot proceed to next step. Please complete the current step first.'
+      }
+    }
+
+    const nextStep = this.steps[nextIndex]
+    const missingDependencies = this.getStepDependencies(nextStep, nextIndex).filter(
+      dependencyId => !this.session!.progress.completedSteps.includes(dependencyId)
+    )
+
+    if (missingDependencies.length > 0) {
+      const missingNames = missingDependencies.map(depId => {
+        const dependencyStep = this.steps.find(step => step.id === depId)
+        return dependencyStep?.name || depId
+      })
+
+      return {
+        allowed: false,
+        reason: 'Complete required steps before continuing.',
+        missing_requirements: missingNames
+      }
+    }
+
+    const warnings: string[] = []
+    let fallback = false
+
+    if (!this.shouldSkipRemoteNavigationValidation()) {
+      try {
+        const payload = this.buildNavigationValidationPayload(nextStep.id)
+        const response = await fetch(`${this.apiUrl}/navigation/validate`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${this.session.sessionToken}`
+          },
+          body: JSON.stringify(payload)
+        })
+
+        if (response.ok) {
+          const result = await response.json()
+          const remoteAllowed = result?.allowed !== undefined ? Boolean(result.allowed) : true
+
+          if (!remoteAllowed) {
+            return {
+              allowed: false,
+              reason: result?.reason || 'Navigation blocked by server validation.',
+              warnings: Array.isArray(result?.warnings) ? result.warnings : undefined,
+              missing_requirements: result?.missing_requirements
+            }
+          }
+
+          if (Array.isArray(result?.warnings)) {
+            warnings.push(...result.warnings)
+          }
+        } else if (response.status === 401) {
+          fallback = true
+          warnings.push('Your onboarding session appears to be expired. Progress will continue locally.')
+        } else {
+          fallback = true
+          warnings.push('Navigation validation failed. Continuing locally while offline.')
+          const errorText = await response.text().catch(() => '')
+          console.error('Navigation validation failed:', response.status, errorText)
+        }
+      } catch (error) {
+        fallback = true
+        warnings.push('We could not reach the server. Progress will continue locally.')
+        console.error('Navigation validation error:', error)
+      }
+    }
+
+    this.currentStepIndex = nextIndex
+    this.recomputeProgressMetadata()
+
+    return {
+      allowed: true,
+      warnings: warnings.length > 0 ? warnings : undefined,
+      fallback: fallback || undefined
     }
   }
 
@@ -495,16 +838,43 @@ export class OnboardingFlowController {
    * Navigate to previous step
    */
   goToPreviousStep(): void {
-    this.currentStepIndex = Math.max(this.currentStepIndex - 1, 0)
+    this.setCurrentStepIndex(Math.max(this.currentStepIndex - 1, 0))
   }
 
   /**
    * Navigate to specific step by index
    */
   goToStep(stepIndex: number): void {
-    if (stepIndex >= 0 && stepIndex < this.steps.length) {
-      this.currentStepIndex = stepIndex
+    this.setCurrentStepIndex(stepIndex)
+  }
+
+  setCurrentStepIndex(stepIndex: number): void {
+    if (stepIndex < 0 || stepIndex >= this.steps.length) {
+      return
     }
+
+    this.currentStepIndex = stepIndex
+
+    if (this.session) {
+      this.session.progress.currentStepIndex = stepIndex
+      this.recomputeProgressMetadata()
+    }
+  }
+
+  canNavigateToStep(stepIndex: number): boolean {
+    if (!this.session) return false
+    if (stepIndex < 0 || stepIndex >= this.steps.length) return false
+
+    this.recomputeProgressMetadata()
+
+    const step = this.steps[stepIndex]
+    const state = this.getStepState(step.id)
+
+    if (state === 'locked') {
+      return false
+    }
+
+    return state === 'ready' || state === 'in-progress' || state === 'complete'
   }
 
   /**
@@ -535,7 +905,8 @@ export class OnboardingFlowController {
     }
 
     const currentStep = this.getCurrentStep()
-    const progress = this.getProgress()
+    const progressSnapshot = this.getProgress()
+    const stepStates = progressSnapshot.stepStates ?? this.getStepStates()
 
     return {
       currentStep: {
@@ -545,15 +916,24 @@ export class OnboardingFlowController {
         required: currentStep.required
       },
       progress: {
-        completedSteps: progress.completedSteps,
-        currentStepIndex: this.currentStepIndex,
-        totalSteps: this.steps.length,
-        percentComplete: progress.percentComplete
+        completedSteps: progressSnapshot.completedSteps,
+        currentStepIndex: progressSnapshot.currentStepIndex,
+        currentStepId: progressSnapshot.currentStepId,
+        totalSteps: progressSnapshot.totalSteps,
+        percentComplete: progressSnapshot.percentComplete,
+        stepStates
       },
       markStepComplete: this.markStepComplete.bind(this),
       saveProgress: this.saveProgress.bind(this),
       goToNextStep: this.goToNextStep.bind(this),
       goToPreviousStep: this.goToPreviousStep.bind(this),
+      goToStep: this.goToStep.bind(this),
+      advanceToNextStep: this.advanceToNextStep.bind(this),
+      canProceedToNext: this.canProceedToNextStep(),
+      getStepState: this.getStepState.bind(this),
+      stepStates,
+      setStepResumeAnchor: this.setStepResumeAnchor.bind(this),
+      getStepResumeAnchor: this.getStepResumeAnchor.bind(this),
       language: 'en', // This would be dynamic from session
       employee: this.session.employee,
       property: this.session.property,
@@ -661,5 +1041,56 @@ export class OnboardingFlowController {
   getEstimatedTimeRemaining(): number {
     const remainingSteps = this.steps.slice(this.currentStepIndex)
     return remainingSteps.reduce((total, step) => total + (step.estimatedMinutes || 5), 0)
+  }
+
+  /**
+   * Restore local progress from sessionStorage and merge with current session
+   * This ensures that locally completed steps are not lost when loading from backend
+   */
+  restoreLocalProgress(): void {
+    if (!this.session) {
+      console.warn('Cannot restore local progress: session not initialized')
+      return
+    }
+
+    try {
+      // Restore overall progress from sessionStorage
+      const progressKey = 'onboarding_progress'
+      const savedProgressStr = sessionStorage.getItem(progressKey)
+
+      if (savedProgressStr) {
+        const savedProgress = JSON.parse(savedProgressStr)
+
+        // Merge completed steps (union of local and backend)
+        const mergedCompletedSteps = new Set([
+          ...this.session.progress.completedSteps,
+          ...(savedProgress.completedSteps || [])
+        ])
+
+        this.session.progress.completedSteps = Array.from(mergedCompletedSteps)
+      }
+
+      // Also check individual step completion flags
+      this.steps.forEach(step => {
+        const completionKey = `onboarding_${step.id}_completed`
+        const isCompleted = sessionStorage.getItem(completionKey) === 'true'
+
+        if (isCompleted && !this.session!.progress.completedSteps.includes(step.id)) {
+          this.session!.progress.completedSteps.push(step.id)
+        }
+      })
+
+      // Recalculate percent complete after merging
+      const totalSteps = this.steps.length
+      const completedCount = this.session.progress.completedSteps.length
+      this.session.progress.percentComplete = Math.round((completedCount / totalSteps) * 100)
+
+      console.log('Local progress restored. Completed steps:', this.session.progress.completedSteps)
+    } catch (error) {
+      console.error('Failed to restore local progress:', error)
+      // Don't throw - continue with backend progress only
+    }
+
+    this.recomputeProgressMetadata()
   }
 }

@@ -10,12 +10,12 @@ import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
 import { useAutoSave } from '@/hooks/useAutoSave'
-import { 
-  Upload, 
-  FileText, 
-  CheckCircle, 
-  X, 
-  AlertCircle, 
+import {
+  Upload,
+  FileText,
+  CheckCircle,
+  X,
+  AlertCircle,
   Image,
   Loader2,
   Eye,
@@ -23,6 +23,7 @@ import {
   Trash2
 } from 'lucide-react'
 import axios from 'axios'
+import { getApiUrl } from '@/config/api'
 
 interface UploadedDocument {
   id: string
@@ -50,9 +51,11 @@ export default function I9Section2Step({
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep: _advanceToNextStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   const [formData, setFormData] = useState<I9Section2Data>({
@@ -168,7 +171,9 @@ export default function I9Section2Step({
         fileName: file.name,
         fileSize: file.size,
         fileData: base64,
-        uploadedAt: new Date().toISOString()
+        uploadedAt: new Date().toISOString(),
+        file: file, // Store original File object for upload to Supabase
+        originalFile: file // Also store as originalFile for compatibility
       }
 
       // If it's an image, create a preview
@@ -176,18 +181,19 @@ export default function I9Section2Step({
         newDocument.preview = base64
       }
 
-      // Process with OCR if API is available
+      // Process with OCR and upload to Supabase storage
       if (employee?.id) {
         setProcessingOcr(true)
         try {
-          const formData = new FormData()
-          formData.append('file', file)
-          formData.append('document_type', documentList)
-          formData.append('employee_id', employee.id)
+          // Step 1: OCR Processing
+          const ocrFormData = new FormData()
+          ocrFormData.append('file', file)
+          ocrFormData.append('document_type', documentList)
+          ocrFormData.append('employee_id', employee.id)
 
-          const response = await axios.post(
-            `${import.meta.env.VITE_API_URL || '/api'}/api/documents/process`,
-            formData,
+          const ocrResponse = await axios.post(
+            `${getApiUrl()}/documents/process`,
+            ocrFormData,
             {
               headers: {
                 'Content-Type': 'multipart/form-data'
@@ -195,10 +201,30 @@ export default function I9Section2Step({
             }
           )
 
-          if (response.data.success) {
-            newDocument.ocrData = response.data.data.extracted_data
+          if (ocrResponse.data.success) {
+            newDocument.ocrData = ocrResponse.data.data.extracted_data
             console.log('OCR data extracted:', newDocument.ocrData)
           }
+
+          // Step 2: Upload to Supabase storage (in parallel or after OCR)
+          try {
+            const { uploadOnboardingDocument } = await import('../../services/onboardingDocuments')
+            const uploadResult = await uploadOnboardingDocument({
+              employeeId: employee.id,
+              documentType: documentList, // This will be 'list_a', 'list_b', 'list_c'
+              documentCategory: documentList, // Backend expects this format
+              file: file
+            })
+
+            // Store upload metadata
+            newDocument.storageMetadata = uploadResult?.data || uploadResult
+            console.log('Document uploaded to Supabase storage:', uploadResult)
+
+          } catch (uploadError) {
+            console.error('Failed to upload document to storage:', uploadError)
+            // Continue without storage upload - will retry in I9CompleteStep
+          }
+
         } catch (ocrError) {
           console.error('OCR processing failed:', ocrError)
           // Continue without OCR data
@@ -312,7 +338,7 @@ export default function I9Section2Step({
         }))
         
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL || '/api'}/api/onboarding/${employee.id}/i9-section2`,
+          `${getApiUrl()}/onboarding/${employee.id}/i9-section2`,
           {
             method: 'POST',
             headers: {
@@ -602,28 +628,6 @@ export default function I9Section2Step({
             </div>
           )}
 
-          {/* Submit Button */}
-          {formData.documentSelection && (
-            <div className="flex justify-end pt-6">
-              <Button
-                onClick={handleComplete}
-                disabled={!canProceed() || formData.verificationComplete}
-                size="lg"
-                className="px-8"
-              >
-                {formData.verificationComplete ? (
-                  <>
-                    <CheckCircle className="mr-2 h-5 w-5" />
-                    Documents Submitted
-                  </>
-                ) : (
-                  <>
-                    {t.proceedButton}
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
         </div>
       </StepContentWrapper>
     </StepContainer>

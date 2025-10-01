@@ -228,13 +228,13 @@ export default function ManagerDashboard() {
 
   return (
     <ErrorBoundary>
-      <div className="responsive-container padding-md max-w-7xl">
+      <div className="container mx-auto px-4 py-6 max-w-7xl">
         {/* Header Section */}
-        <div className="spacing-lg">
+        <div className="space-y-6">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-4">
-            <div className="spacing-xs">
-              <h1 className="text-display-md">Manager Dashboard</h1>
-              <p className="text-body-md text-secondary">Welcome back, {user.first_name} {user.last_name}</p>
+            <div className="space-y-1">
+              <h1 className="text-3xl font-bold text-gray-900">Manager Dashboard</h1>
+              <p className="text-base text-gray-600">Welcome back, {user.first_name} {user.last_name}</p>
             </div>
             <div className="flex items-center gap-3">
               {error && (
@@ -314,7 +314,7 @@ export default function ManagerDashboard() {
                       <p className="text-sm font-medium text-slate-700">Status</p>
                       <p className="text-xs text-slate-500">Control property visibility for applicants</p>
                     </div>
-                    <Badge className={property.is_active ? 'badge-success' : 'badge-default'}>
+                    <Badge className={property.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}>
                       {property.is_active ? 'Active' : 'Inactive'}
                     </Badge>
                   </div>
@@ -335,58 +335,58 @@ export default function ManagerDashboard() {
           {loading ? (
             <StatsSkeleton count={5} />
           ) : stats ? (
-            <div className="responsive-grid-5 gap-sm">
-              <Card className="card-elevated card-rounded-md hover-lift">
-                <CardContent className="card-padding-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <FileText className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                    <div className="spacing-xs min-w-0">
-                      <p className="text-body-sm font-medium text-primary">Total Applications</p>
-                      <p className="text-heading-md text-brand-primary">{stats.total_applications}</p>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-700">Total Applications</p>
+                      <p className="text-2xl font-bold text-blue-600">{stats.total_applications}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="card-elevated card-rounded-md hover-lift">
-                <CardContent className="card-padding-sm">
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <FileText className="h-5 w-5 text-amber-500 flex-shrink-0" />
-                    <div className="spacing-xs min-w-0">
-                      <p className="text-body-sm font-medium text-primary">Pending</p>
-                      <p className="text-heading-md text-amber-600">{stats.pending_applications}</p>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-700">Pending</p>
+                      <p className="text-2xl font-bold text-amber-600">{stats.pending_applications}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="card-elevated card-rounded-md hover-lift">
-                <CardContent className="card-padding-sm">
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <FileText className="h-5 w-5 text-green-500 flex-shrink-0" />
-                    <div className="spacing-xs min-w-0">
-                      <p className="text-body-sm font-medium text-primary">Approved</p>
-                      <p className="text-heading-md text-green-600">{stats.approved_applications}</p>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-700">Approved</p>
+                      <p className="text-2xl font-bold text-green-600">{stats.approved_applications}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="card-elevated card-rounded-md hover-lift">
-                <CardContent className="card-padding-sm">
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <Users className="h-5 w-5 text-blue-500 flex-shrink-0" />
-                    <div className="spacing-xs min-w-0">
-                      <p className="text-body-sm font-medium text-primary">Total Employees</p>
-                      <p className="text-heading-md text-brand-primary">{stats.total_employees}</p>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-700">Total Employees</p>
+                      <p className="text-2xl font-bold text-blue-600">{stats.total_employees}</p>
                     </div>
                   </div>
                 </CardContent>
               </Card>
-              <Card className="card-elevated card-rounded-md hover-lift">
-                <CardContent className="card-padding-sm">
+              <Card className="shadow-sm hover:shadow-md transition-shadow">
+                <CardContent className="p-4">
                   <div className="flex items-center gap-3">
                     <Users className="h-5 w-5 text-green-500 flex-shrink-0" />
-                    <div className="spacing-xs min-w-0">
-                      <p className="text-body-sm font-medium text-primary">Active</p>
-                      <p className="text-heading-md text-green-600">{stats.active_employees}</p>
+                    <div className="space-y-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-700">Active</p>
+                      <p className="text-2xl font-bold text-green-600">{stats.active_employees}</p>
                     </div>
                   </div>
                 </CardContent>
@@ -396,27 +396,27 @@ export default function ManagerDashboard() {
         </div>
 
         {/* Main Dashboard Tabs */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="spacing-md">
-          <TabsList className="nav-tabs w-full grid grid-cols-1 sm:grid-cols-4 gap-1 bg-gray-50 p-1 rounded-xl">
-            <TabsTrigger value="applications" className="nav-tab rounded-lg flex items-center gap-2">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
+          <TabsList className="w-full grid grid-cols-1 sm:grid-cols-4 gap-1 bg-gray-50 p-1 rounded-xl">
+            <TabsTrigger value="applications" className="rounded-lg flex items-center gap-2">
               <FileText className="h-4 w-4" />
               <span className="hidden sm:inline">Applications</span>
               <span className="sm:hidden">Apps</span>
               {stats && stats.pending_applications > 0 && (
-                <Badge className="badge-warning badge-sm ml-1">{stats.pending_applications}</Badge>
+                <Badge className="bg-amber-500 text-white text-xs ml-1">{stats.pending_applications}</Badge>
               )}
             </TabsTrigger>
-            <TabsTrigger value="employees" className="nav-tab rounded-lg flex items-center gap-2">
+            <TabsTrigger value="employees" className="rounded-lg flex items-center gap-2">
               <Users className="h-4 w-4" />
               <span className="hidden sm:inline">Employees</span>
               <span className="sm:hidden">Staff</span>
             </TabsTrigger>
-            <TabsTrigger value="analytics" className="nav-tab rounded-lg flex items-center gap-2">
+            <TabsTrigger value="analytics" className="rounded-lg flex items-center gap-2">
               <BarChart3 className="h-4 w-4" />
               <span className="hidden sm:inline">Analytics</span>
               <span className="sm:hidden">Stats</span>
             </TabsTrigger>
-            <TabsTrigger value="settings" className="nav-tab rounded-lg flex items-center gap-2">
+            <TabsTrigger value="settings" className="rounded-lg flex items-center gap-2">
               <Settings className="h-4 w-4" />
               <span className="hidden sm:inline">Settings</span>
               <span className="sm:hidden">Prefs</span>

@@ -9,15 +9,19 @@ import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
 import { useAutoSave } from '@/hooks/useAutoSave'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 
 export default function I9SupplementsStep({
   currentStep,
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   const [needsSupplements, setNeedsSupplements] = useState<'none' | 'translator'>('none')
@@ -337,7 +341,36 @@ export default function I9SupplementsStep({
       <div className="text-center text-sm text-gray-500">
         <p>{t.estimatedTime}</p>
       </div>
-      </div>
+
+      {/* Navigation Controls */}
+      <NavigationButtons
+        showPrevious={true}
+        showNext={true}
+        onPrevious={goToPreviousStep}
+        onNext={async () => {
+          if (!isComplete) {
+            // Check completion and set to 'none' if not needed
+            if (needsSupplements === 'none' || (needsSupplements === 'translator' && supplementAData)) {
+              const stepData = {
+                needsSupplements,
+                supplementA: supplementAData,
+                federalComplianceNote: 'Supplement B is not applicable for employee - manager handles reverification',
+                completedAt: new Date().toISOString()
+              }
+              await markStepComplete(currentStep.id, stepData)
+            }
+          }
+          if (advanceToNextStep) {
+            return await advanceToNextStep()
+          }
+          return { allowed: false, reason: 'Navigation not available' }
+        }}
+        disabled={!isComplete}
+        language={language}
+        currentStep={progress.currentStepIndex}
+        totalSteps={progress.totalSteps}
+      />
+            </div>
       </StepContentWrapper>
     </StepContainer>
   )

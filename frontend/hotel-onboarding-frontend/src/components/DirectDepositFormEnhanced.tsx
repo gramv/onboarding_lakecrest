@@ -10,10 +10,8 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { CreditCard, Building, Plus, Trash2, AlertTriangle, Info, Upload, Check, Clock, FileText, Save } from 'lucide-react'
-import DocumentUpload from '@/components/DocumentUpload'
-import { DocumentType } from '@/types/documents'
-import { DocumentMetadata } from '@/services/documentService'
 import { useAutoSave } from '@/hooks/useAutoSave'
+import { uploadOnboardingDocument } from '@/services/onboardingDocuments'
 
 interface BankAccount {
   bankName: string
@@ -51,12 +49,13 @@ interface DirectDepositFormEnhancedProps {
   employee?: any
   property?: any
   sessionToken?: string
+  employeeSSN?: string
 }
 
 // Routing number validation using ABA checksum
 const validateRoutingNumber = (routing: string): boolean => {
   if (!/^\d{9}$/.test(routing)) return false
-  
+
   // ABA checksum algorithm
   const weights = [3, 7, 1, 3, 7, 1, 3, 7, 1]
   let sum = 0
@@ -66,19 +65,22 @@ const validateRoutingNumber = (routing: string): boolean => {
   return sum % 10 === 0
 }
 
-// Common bank routing numbers for validation
-const KNOWN_BANKS: Record<string, string> = {
-  '021000021': 'JPMorgan Chase',
-  '026009593': 'Bank of America',
-  '121000358': 'Wells Fargo',
-  '056008849': 'PNC Bank',
-  '053101121': 'SunTrust Bank',
-  '071000013': 'US Bank',
-  '111000025': 'Bank of the West',
-  '021200025': 'TD Bank',
-  '031100649': 'Capital One',
-  '021001033': 'HSBC'
+// Helper: Convert file to base64
+const fileToBase64 = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.readAsDataURL(file)
+    reader.onload = () => {
+      const result = reader.result as string
+      // Remove the data:image/...;base64, prefix
+      const base64 = result.split(',')[1] || result
+      resolve(base64)
+    }
+    reader.onerror = error => reject(error)
+  })
 }
+
+// No hardcoded bank list - ABA checksum validation works for all US banks
 
 export default function DirectDepositFormEnhanced({
   initialData = {},
@@ -90,7 +92,8 @@ export default function DirectDepositFormEnhanced({
   useMainNavigation = false,
   employee,
   property,
-  sessionToken
+  sessionToken,
+  employeeSSN
 }: DirectDepositFormEnhancedProps) {
   const [formData, setFormData] = useState<DirectDepositData>({
     paymentMethod: 'direct_deposit',
@@ -118,6 +121,18 @@ export default function DirectDepositFormEnhanced({
   const [touchedFields, setTouchedFields] = useState<Record<string, boolean>>({})
   const [showErrors, setShowErrors] = useState(false)
   const [isValid, setIsValid] = useState(false)
+
+  // OCR suggestion state
+  const [ocrSuggestion, setOcrSuggestion] = useState<{
+    bankName: string
+    routingNumber: string
+    accountNumber: string
+  } | null>(null)
+  const [isProcessingOcr, setIsProcessingOcr] = useState(false)
+
+  // Upload states
+  const [isUploadingVoidedCheck, setIsUploadingVoidedCheck] = useState(false)
+  const [isUploadingBankLetter, setIsUploadingBankLetter] = useState(false)
 
   // Update form data when initialData changes (for navigation back)
   useEffect(() => {
@@ -229,6 +244,136 @@ export default function DirectDepositFormEnhanced({
       }
     }
     return translations[language]?.[key] || key
+  }
+
+  // Handle voided check upload to Supabase (resilient like I9Section2Step)
+  const handleVoidedCheckUpload = async (file: File) => {
+    console.log('📤 handleVoidedCheckUpload called')
+    console.log('  - file:', file.name)
+    console.log('  - employee.id:', employee?.id)
+
+    setIsUploadingVoidedCheck(true)
+
+    // Track file locally FIRST (even if upload fails - can retry later)
+    setFormData(prev => ({
+      ...prev,
+      voidedCheckFile: file,
+      voidedCheckUploaded: true  // Mark as "uploaded" (tracked locally)
+    }))
+
+    // Try to upload to Supabase if employee.id exists
+    if (employee?.id) {
+      try {
+        // Use dynamic import like I9 does
+        const { uploadOnboardingDocument } = await import('@/services/onboardingDocuments')
+        const uploadResult = await uploadOnboardingDocument({
+          employeeId: employee.id,
+          documentType: 'voided_check',
+          documentCategory: 'financial_documents',
+          file
+        })
+        console.log('✅ Voided check uploaded to Supabase:', uploadResult)
+      } catch (error) {
+        console.error('⚠️ Failed to upload to Supabase (file stored locally, will retry later):', error)
+        // Don't alert - file is tracked locally, can retry in DirectDepositStep or final save
+      }
+    } else {
+      console.warn('⚠️ employee.id not available - file stored locally, will upload when employee data loads')
+    }
+
+    setIsUploadingVoidedCheck(false)
+  }
+
+  // Handle bank letter upload to Supabase (resilient like I9Section2Step)
+  const handleBankLetterUpload = async (file: File) => {
+    console.log('📤 handleBankLetterUpload called')
+    console.log('  - file:', file.name)
+    console.log('  - employee.id:', employee?.id)
+
+    setIsUploadingBankLetter(true)
+
+    // Track file locally FIRST (even if upload fails - can retry later)
+    setFormData(prev => ({
+      ...prev,
+      bankLetterFile: file,
+      bankLetterUploaded: true  // Mark as "uploaded" (tracked locally)
+    }))
+
+    // Try to upload to Supabase if employee.id exists
+    if (employee?.id) {
+      try {
+        // Use dynamic import like I9 does
+        const { uploadOnboardingDocument } = await import('@/services/onboardingDocuments')
+        const uploadResult = await uploadOnboardingDocument({
+          employeeId: employee.id,
+          documentType: 'bank_letter',
+          documentCategory: 'financial_documents',
+          file
+        })
+        console.log('✅ Bank letter uploaded to Supabase:', uploadResult)
+      } catch (error) {
+        console.error('⚠️ Failed to upload to Supabase (file stored locally, will retry later):', error)
+        // Don't alert - file is tracked locally, can retry in DirectDepositStep or final save
+      }
+    } else {
+      console.warn('⚠️ employee.id not available - file stored locally, will upload when employee data loads')
+    }
+
+    setIsUploadingBankLetter(false)
+  }
+
+  // OCR validation for voided check/bank letter (optional feature)
+  const validateCheckWithOCR = async (file: File) => {
+    // Skip OCR if employee.id is not available (graceful degradation)
+    if (!employee?.id) {
+      console.warn('⚠️ Skipping OCR - employee.id not available. OCR will run when employee data loads.')
+      return
+    }
+
+    setIsProcessingOcr(true)
+    try {
+      const base64Data = await fileToBase64(file)
+      const apiUrl = window.location.origin.includes('localhost')
+        ? 'http://localhost:8000'
+        : window.location.origin.replace(':3000', ':8000')
+
+      const response = await fetch(
+        `${apiUrl}/api/onboarding/${employee.id}/direct-deposit/validate-check`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            image_data: base64Data,
+            file_name: file.name
+          })
+        }
+      )
+
+      if (!response.ok) {
+        console.warn('OCR validation failed:', response.status)
+        return
+      }
+
+      const result = await response.json()
+
+      // Only show suggestion if confidence is good (>75%)
+      if (result.confidence_scores?.overall > 0.75 && result.extracted_data) {
+        const extracted = result.extracted_data
+        setOcrSuggestion({
+          bankName: extracted.bank_name || extracted.suggested_bank_name || '',
+          routingNumber: extracted.routing_number || '',
+          accountNumber: extracted.account_number || ''
+        })
+        console.log('✅ OCR suggestions available (confidence:', result.confidence_scores.overall, ')')
+      } else {
+        console.log('ℹ️ OCR completed but confidence too low or no data extracted')
+      }
+    } catch (error) {
+      console.error('⚠️ OCR validation error (optional feature):', error)
+      // Don't alert - OCR is optional, silent failure is acceptable
+    } finally {
+      setIsProcessingOcr(false)
+    }
   }
 
   // Enhanced validation with bank routing verification
@@ -349,17 +494,6 @@ export default function DirectDepositFormEnhanced({
     if (errors[field]) {
       setErrors(prev => ({ ...prev, [field]: '' }))
     }
-
-    // Auto-detect bank from routing number
-    if (field.endsWith('routingNumber') && value.length === 9) {
-      const bankName = KNOWN_BANKS[value]
-      if (bankName && field.startsWith('primaryAccount')) {
-        setFormData(prev => ({
-          ...prev,
-          primaryAccount: { ...prev.primaryAccount, bankName }
-        }))
-      }
-    }
   }
 
   // Handle field blur to show validation errors
@@ -385,15 +519,6 @@ export default function DirectDepositFormEnhanced({
     // Clear error when user starts typing
     if (errors[fieldKey]) {
       setErrors(prev => ({ ...prev, [fieldKey]: '' }))
-    }
-
-    // Auto-detect bank from routing number
-    if (field === 'routingNumber' && value.length === 9) {
-      const bankName = KNOWN_BANKS[value]
-      if (bankName) {
-        newAccounts[index].bankName = bankName
-        setFormData(prev => ({ ...prev, additionalAccounts: newAccounts }))
-      }
     }
   }
 
@@ -515,6 +640,57 @@ export default function DirectDepositFormEnhanced({
         </CardContent>
       </Card>
 
+      {/* OCR Suggestion - Simple and friendly */}
+      {ocrSuggestion && formData.paymentMethod === 'direct_deposit' && (
+        <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex items-start gap-3">
+            <div className="text-3xl">💡</div>
+            <div className="flex-1">
+              <p className="font-semibold text-blue-900 mb-2 text-base">
+                We detected your banking information!
+              </p>
+              <div className="text-sm text-blue-800 space-y-1 mb-3 bg-white/50 rounded p-3">
+                <p><span className="font-medium">Bank:</span> {ocrSuggestion.bankName}</p>
+                <p><span className="font-medium">Routing:</span> {ocrSuggestion.routingNumber}</p>
+                <p><span className="font-medium">Account:</span> {ocrSuggestion.accountNumber}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  onClick={() => {
+                    // Auto-fill the form
+                    setFormData(prev => ({
+                      ...prev,
+                      primaryAccount: {
+                        ...prev.primaryAccount,
+                        bankName: ocrSuggestion.bankName,
+                        routingNumber: ocrSuggestion.routingNumber,
+                        accountNumber: ocrSuggestion.accountNumber,
+                        accountNumberConfirm: ocrSuggestion.accountNumber
+                      }
+                    }))
+                    setOcrSuggestion(null) // Hide suggestion
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white"
+                  size="sm"
+                >
+                  <Check className="mr-2 h-4 w-4" />
+                  Use This Info
+                </Button>
+                <Button
+                  type="button"
+                  onClick={() => setOcrSuggestion(null)}
+                  variant="outline"
+                  size="sm"
+                >
+                  Dismiss
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Direct Deposit Options - Only show if direct deposit selected */}
       {formData.paymentMethod === 'direct_deposit' && (
         <>
@@ -615,9 +791,6 @@ export default function DirectDepositFormEnhanced({
                 </div>
                 {shouldShowError('primaryAccount.routingNumber') && errors['primaryAccount.routingNumber'] && (
                   <p className="text-red-600 text-xs mt-1">{errors['primaryAccount.routingNumber']}</p>
-                )}
-                {KNOWN_BANKS[formData.primaryAccount.routingNumber] && (
-                  <p className="text-green-600 text-xs mt-1">{t('bank_detected')}: {KNOWN_BANKS[formData.primaryAccount.routingNumber]}</p>
                 )}
               </div>
               
@@ -859,53 +1032,99 @@ export default function DirectDepositFormEnhanced({
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Voided Check Upload */}
-                <DocumentUpload
-                  documentType={DocumentType.VOIDED_CHECK}
-                  employeeId={employee?.id || 'temp-employee-id'}
-                  propertyId={property?.id || 'temp-property-id'}
-                  title={t('voided_check')}
-                  description={t('voided_check_desc')}
-                  acceptedFileTypes={['.pdf', '.jpg', '.jpeg', '.png']}
-                  maxFileSize={10 * 1024 * 1024}
-                  onUploadComplete={(document) => {
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      voidedCheckUploaded: true,
-                      voidedCheckDocument: document
-                    }))
-                    // Trigger save on next change (handled by useAutoSave hook)
-                  }}
-                  onUploadError={(error) => {
-                    console.error('Failed to upload voided check:', error)
-                  }}
-                  existingDocument={formData.voidedCheckDocument}
-                  language={language}
-                />
+                {/* Voided Check Upload with OCR */}
+                <div>
+                  <Label className="block mb-2">{t('voided_check')}</Label>
+                  <p className="text-sm text-gray-600 mb-3">{t('voided_check_desc')}</p>
+
+                  <input
+                    type="file"
+                    id="voided-check-upload"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        // Upload to storage
+                        await handleVoidedCheckUpload(file)
+                        // Also trigger OCR for auto-fill
+                        await validateCheckWithOCR(file)
+                      }
+                    }}
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full mb-2"
+                    onClick={() => document.getElementById('voided-check-upload')?.click()}
+                    disabled={isUploadingVoidedCheck}
+                  >
+                    {isUploadingVoidedCheck ? (
+                      <>
+                        <Clock className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : formData.voidedCheckUploaded ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4 text-green-600" />
+                        Upload Voided Check
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload Voided Check
+                      </>
+                    )}
+                  </Button>
+                </div>
 
                 {/* Bank Letter Upload */}
-                <DocumentUpload
-                  documentType="bank_letter"
-                  employeeId={employee?.id || 'temp-employee-id'}
-                  propertyId={property?.id || 'temp-property-id'}
-                  title={t('bank_letter')}
-                  description={t('bank_letter_desc')}
-                  acceptedFileTypes={['.pdf', '.jpg', '.jpeg', '.png']}
-                  maxFileSize={10 * 1024 * 1024}
-                  onUploadComplete={(document) => {
-                    setFormData(prev => ({ 
-                      ...prev, 
-                      bankLetterUploaded: true,
-                      bankLetterDocument: document
-                    }))
-                    // Trigger save on next change (handled by useAutoSave hook)
-                  }}
-                  onUploadError={(error) => {
-                    console.error('Failed to upload bank letter:', error)
-                  }}
-                  existingDocument={formData.bankLetterDocument}
-                  language={language}
-                />
+                <div>
+                  <Label className="block mb-2">{t('bank_letter')}</Label>
+                  <p className="text-sm text-gray-600 mb-3">{t('bank_letter_desc')}</p>
+
+                  <input
+                    type="file"
+                    id="bank-letter-upload"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (file) {
+                        // Upload to storage
+                        await handleBankLetterUpload(file)
+                        // Also trigger OCR for auto-fill
+                        await validateCheckWithOCR(file)
+                      }
+                    }}
+                  />
+
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full mb-2"
+                    onClick={() => document.getElementById('bank-letter-upload')?.click()}
+                    disabled={isUploadingBankLetter}
+                  >
+                    {isUploadingBankLetter ? (
+                      <>
+                        <Clock className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : formData.bankLetterUploaded ? (
+                      <>
+                        <Check className="mr-2 h-4 w-4 text-green-600" />
+                        Upload Bank Letter
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload Bank Letter
+                      </>
+                    )}
+                  </Button>
+                </div>
               </div>
 
               {shouldShowError('verification') && errors.verification && (

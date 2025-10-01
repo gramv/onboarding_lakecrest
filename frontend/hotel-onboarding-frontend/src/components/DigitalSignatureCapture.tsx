@@ -111,12 +111,26 @@ export default function DigitalSignatureCapture({
     addAuditTrailEntry('Signature capture initiated', 'User opened digital signature interface')
   }, [])
 
+  // Initialize canvas with transparent background
+  useEffect(() => {
+    if (canvasRef.current) {
+      const canvas = canvasRef.current
+      const ctx = canvas.getContext('2d')
+      if (ctx) {
+        // Ensure canvas starts with transparent background
+        ctx.clearRect(0, 0, canvas.width, canvas.height)
+        // Set compositing to ensure we don't add white background
+        ctx.globalCompositeOperation = 'source-over'
+      }
+    }
+  }, [])
+
   useEffect(() => {
     // Check if all requirements are met
     const allAcknowledgmentsChecked = acknowledgementsChecked.every(checked => checked)
     const hasSignature = signatureData.length > 0
     const identityOk = requireIdentityVerification ? identityVerified : true
-    
+
     setCanSign(allAcknowledgmentsChecked && hasSignature && termsAccepted && identityOk)
   }, [acknowledgementsChecked, signatureData, typedName, termsAccepted, identityVerified, requireIdentityVerification, signatureMethod])
 
@@ -172,9 +186,11 @@ export default function DigitalSignatureCapture({
 
   const stopDrawing = () => {
     if (!isDrawing || !canvasRef.current) return
-    
+
     setIsDrawing(false)
     const canvas = canvasRef.current
+
+    // Ensure we get a PNG with transparent background (not white)
     const dataUrl = canvas.toDataURL('image/png')
     setSignatureData(dataUrl)
   }

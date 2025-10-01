@@ -342,14 +342,62 @@ export const finalReviewValidator = (data: any): ValidationResult => {
 }
 
 // Map step IDs to validators
+export const welcomeValidator = (data: any = {}): ValidationResult => {
+  const acknowledged = Boolean(data.welcomeAcknowledged ?? data.timerComplete)
+  return {
+    valid: acknowledged,
+    errors: acknowledged ? [] : ['Preparing your onboarding experience...']
+  }
+}
+
+export const jobDetailsValidator = (data: any = {}): ValidationResult => {
+  const acknowledged = Boolean(data.acknowledged)
+  return {
+    valid: acknowledged,
+    errors: acknowledged ? [] : ['Please accept the job details before continuing.']
+  }
+}
+
+export const traffickingValidator = (data: any = {}): ValidationResult => {
+  const complete = Boolean(data.trainingComplete || data.training_completed)
+  return {
+    valid: complete,
+    errors: complete ? [] : ['Complete the human trafficking training to proceed.']
+  }
+}
+
+export const weaponsPolicyValidator = (data: any = {}): ValidationResult => {
+  const signed = Boolean(data.isSigned || data.signed)
+  return {
+    valid: signed,
+    errors: signed ? [] : ['Please review and sign the weapons policy acknowledgment.']
+  }
+}
+
+export const documentUploadValidatorEnhanced = (data: any): ValidationResult => {
+  const baseResult = documentUploadValidator(data)
+  const hasUploads = Array.isArray(data?.selectedDocuments) && data.selectedDocuments.length > 0
+  return {
+    ...baseResult,
+    valid: baseResult.valid && hasUploads,
+    errors: baseResult.valid && !hasUploads
+      ? ['Select and upload the required documents before continuing']
+      : baseResult.errors
+  }
+}
+
 export const stepValidators: Record<string, (data: any) => ValidationResult> = {
+  welcome: welcomeValidator,
   'personal-info': personalInfoValidator,
+  'job-details': jobDetailsValidator,
+  'company-policies': companyPoliciesValidator,
   'i9-section1': i9Section1Validator,
   'i9-complete': i9Section1Validator,
+  'document-upload': documentUploadValidatorEnhanced,
   'w4-form': w4FormValidator,
   'direct-deposit': directDepositValidator,
-  'company-policies': companyPoliciesValidator,
+  'trafficking-awareness': traffickingValidator,
+  'weapons-policy': weaponsPolicyValidator,
   'health-insurance': healthInsuranceValidator,
-  'document-upload': documentUploadValidator,
   'final-review': finalReviewValidator
 }

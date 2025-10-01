@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react'
+import React, { useState, useEffect, useCallback, useRef } from 'react'
 import PersonalInformationForm from '@/components/PersonalInformationForm'
 import EmergencyContactsForm from '@/components/EmergencyContactsForm'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -31,6 +31,7 @@ export default function PersonalInfoStepEnhanced({
   const [personalInfoValid, setPersonalInfoValid] = useState(false)
   const [emergencyContactsValid, setEmergencyContactsValid] = useState(false)
   const [activeTab, setActiveTab] = useState('personal')
+  const tabOverrideRef = useRef(false)
   const [dataLoaded, setDataLoaded] = useState(false)
   const [validationMessages, setValidationMessages] = useState<any[]>([])
   
@@ -83,7 +84,7 @@ export default function PersonalInfoStepEnhanced({
           if (parsed.emergencyContacts) {
             setEmergencyContactsData(parsed.emergencyContacts)
           }
-          if (parsed.activeTab) {
+          if (parsed.activeTab && !tabOverrideRef.current) {
             setActiveTab(parsed.activeTab)
           }
         }
@@ -157,7 +158,9 @@ export default function PersonalInfoStepEnhanced({
 
   const handlePersonalDetailsContinue = useCallback(() => {
     if (personalInfoValid) {
-      setActiveTab('emergency')
+            if (!tabOverrideRef.current) {
+              setActiveTab('emergency')
+            }
       scrollToTop()
       const updatedFormData = {
         personalInfo: personalInfoData,
@@ -169,6 +172,7 @@ export default function PersonalInfoStepEnhanced({
   }, [personalInfoValid, personalInfoData, emergencyContactsData, currentStep.id])
 
   const handleTabChange = useCallback((newTab: string) => {
+    tabOverrideRef.current = true
     setActiveTab(newTab)
     scrollToTop()
     const updatedFormData = {

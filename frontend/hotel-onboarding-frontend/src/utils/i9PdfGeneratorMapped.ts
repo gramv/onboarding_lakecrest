@@ -243,32 +243,42 @@ export async function generateMappedI9Pdf(formData: I9FormData): Promise<Uint8Ar
     // Handle Employee Signature if provided
     if (formData.signatureData?.signature) {
       try {
-        // First try to embed the signature as an image
         const signatureBase64 = formData.signatureData.signature
-        
-        // Convert base64 to image
         const signatureImageBytes = Uint8Array.from(atob(signatureBase64.split(',')[1]), c => c.charCodeAt(0))
         const signatureImage = await pdfDoc.embedPng(signatureImageBytes)
-        
-        // Get the first page (where signature field is located)
+
         const pages = pdfDoc.getPages()
         const firstPage = pages[0]
-        
-        // Draw the signature image on the page
-        // Position at "Signature of Employee" field based on extracted coordinates
-        const signatureDims = signatureImage.scale(0.15) // Scale to fit signature box
-        firstPage.drawImage(signatureImage, {
-          x: 42, // Left side where "Signature of Employee" text is
-          y: 335, // Just below the signature line (text is at y=351, field would be below)
-          width: signatureDims.width,
-          height: signatureDims.height,
-        })
-        
-        console.log('Added employee signature image')
+
+        const signatureField = form.getTextField('Signature of Employee')
+        const signatureWidget = signatureField.acroField.getWidgets()[0]
+        const fieldRect = signatureWidget?.getRectangle?.()
+
+        if (fieldRect) {
+          const [left, bottom, right, top] = fieldRect
+          const padding = 4
+          const targetWidth = Math.max(0, right - left - padding * 2)
+          const targetHeight = Math.max(0, top - bottom - padding * 2)
+          const { width: imgWidth, height: imgHeight } = signatureImage.scale(1)
+          const scale = Math.min(targetWidth / imgWidth, targetHeight / imgHeight, 1)
+          const width = imgWidth * scale
+          const height = imgHeight * scale
+          const x = left + (targetWidth - width) / 2 + padding
+          const y = bottom + (targetHeight - height) / 2 + padding
+
+          firstPage.drawImage(signatureImage, {
+            x,
+            y,
+            width,
+            height
+          })
+          console.log('Added employee signature image using field coordinates')
+        } else {
+          throw new Error('Signature field rectangle not found')
+        }
       } catch (e) {
         console.error('Failed to add employee signature image:', e)
-        
-        // Fallback: Try to set as text field
+
         try {
           const signatureField = form.getTextField('Signature of Employee')
           const fullName = `${formData.first_name || ''} ${formData.last_name || ''}`.trim()

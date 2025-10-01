@@ -4,12 +4,12 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
-import { 
-  CheckCircle, 
-  Upload, 
-  FileText, 
-  Camera, 
-  Shield, 
+import {
+  CheckCircle,
+  Upload,
+  FileText,
+  Camera,
+  Shield,
   AlertTriangle,
   Info,
   CreditCard,
@@ -19,6 +19,7 @@ import {
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useStepValidation } from '@/hooks/useStepValidation'
 import { documentUploadValidator } from '@/utils/stepValidators'
@@ -99,15 +100,19 @@ export default function DocumentUploadStep({
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([])
   const [uploadedFiles, setUploadedFiles] = useState<Record<string, File>>({})
   const [documentStrategy, setDocumentStrategy] = useState<'listA' | 'listBC'>('listA')
   const [isComplete, setIsComplete] = useState(false)
+  const [isAdvancing, setIsAdvancing] = useState(false)
 
   // Validation hook
   const { errors, validate } = useStepValidation(documentUploadValidator)
@@ -528,6 +533,20 @@ export default function DocumentUploadStep({
         <div className="text-center text-sm text-gray-500">
           <p>{t.estimatedTime}</p>
         </div>
+
+        {/* Navigation */}
+        <NavigationButtons
+          showPrevious={true}
+          showNext={true}
+          onPrevious={goToPreviousStep || (() => {})}
+          onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+          disabled={saveStatus?.saving || !isComplete}
+          saving={saveStatus?.saving}
+          hasErrors={!!errors && errors.length > 0}
+          language={language}
+          nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+        />
+
         </div>
       </StepContentWrapper>
     </StepContainer>

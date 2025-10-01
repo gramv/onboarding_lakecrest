@@ -458,3 +458,104 @@ export async function generateCleanI9Pdf(formData: I9FormData): Promise<Uint8Arr
     throw error
   }
 }
+
+// Simple function to add signature to existing PDF without re-filling Section data
+export async function addSignatureToExistingPdf(existingPdfBase64: string, signatureData: any): Promise<string> {
+  console.log('Adding signature to existing I-9 PDF preview')
+
+  try {
+    const cleanedBase64 = existingPdfBase64.startsWith('data:')
+      ? existingPdfBase64.split(',')[1]
+      : existingPdfBase64
+
+    const pdfBytes = Uint8Array.from(atob(cleanedBase64), c => c.charCodeAt(0))
+    const pdfDoc = await PDFDocument.load(pdfBytes)
+
+    console.log('🖊️ Processing signature for I-9 PDF...')
+    const processedSignature = await processSignatureForPDF(signatureData.signature)
+    console.log('✅ Signature processed, embedding in PDF...')
+
+    const base64Data = processedSignature.split(',')[1]
+    const signatureImageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+
+    console.log('📊 Signature embedding details:', {
+      originalDataUrl: signatureData.signature.substring(0, 50) + '...',
+      processedDataUrl: processedSignature.substring(0, 50) + '...',
+      base64Length: base64Data.length,
+      bytesLength: signatureImageBytes.length,
+      isPNG: processedSignature.startsWith('data:image/png')
+    })
+
+    const signatureImage = await pdfDoc.embedPng(signatureImageBytes)
+    console.log('✅ Signature embedded in PDF successfully:', {
+      width: signatureImage.width,
+      height: signatureImage.height
+    })
+
+    const pages = pdfDoc.getPages()
+    const firstPage = pages[0]
+
+    // Match the backend coordinates (bottom-left origin) so preview aligns with stored PDF
+    const rect = {
+      x0: 50,
+      y0: 402,  // Back to original working position
+      x1: 250,
+      y1: 452
+    }
+    const pad = 4
+    const availableWidth = Math.max(1, (rect.x1 - rect.x0) - pad * 2)
+    const availableHeight = Math.max(1, (rect.y1 - rect.y0) - pad * 2)
+
+    const scale = 0.25
+    const scaledWidth = signatureImage.width * scale
+    const scaledHeight = signatureImage.height * scale
+    const aspectRatio = scaledWidth / scaledHeight
+
+    let drawWidth = Math.min(availableWidth, scaledWidth)
+    let drawHeight = drawWidth / aspectRatio
+    if (drawHeight > availableHeight) {
+      drawHeight = availableHeight
+      drawWidth = drawHeight * aspectRatio
+    }
+
+    const drawX = rect.x0 + pad + (availableWidth - drawWidth) / 2
+    const drawY = rect.y0 + pad + (availableHeight - drawHeight) / 2
+
+    console.log('🎯 Drawing signature at coordinates:', {
+      x: drawX,
+      y: drawY,
+      width: drawWidth,
+      height: drawHeight,
+      originalImageSize: { width: signatureImage.width, height: signatureImage.height },
+      signatureRect: { x0: rect.x0, y0: rect.y0, x1: rect.x1, y1: rect.y1 }
+    })
+
+    // Try drawing with explicit opacity to ensure transparency is preserved
+    firstPage.drawImage(signatureImage, {
+      x: drawX,
+      y: drawY,
+      width: drawWidth,
+      height: drawHeight,
+      opacity: 1.0  // Ensure full opacity for non-transparent pixels
+    })
+
+    console.log('✅ Signature drawn successfully on I-9 PDF')
+
+    const signedPdfBytes = await pdfDoc.save()
+
+    let binary = ''
+    const chunkSize = 8192
+    for (let i = 0; i < signedPdfBytes.length; i += chunkSize) {
+      const chunk = signedPdfBytes.slice(i, i + chunkSize)
+      binary += String.fromCharCode.apply(null, Array.from(chunk))
+    }
+
+    const base64String = btoa(binary)
+    console.log('✓ Signature added to I-9 PDF preview')
+    return base64String
+
+  } catch (error) {
+    console.error('Error adding signature to existing I-9 PDF:', error)
+    throw error
+  }
+}

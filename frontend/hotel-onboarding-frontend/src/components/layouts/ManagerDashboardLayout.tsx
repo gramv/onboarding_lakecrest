@@ -11,9 +11,10 @@ import { DashboardBreadcrumb } from '@/components/ui/breadcrumb'
 import { DashboardNavigation, MANAGER_NAVIGATION_ITEMS } from '@/components/ui/dashboard-navigation'
 import { useSimpleNavigation, useNavigationAnalytics } from '@/hooks/use-simple-navigation'
 import { useToast } from '@/hooks/use-toast'
-import { Building2, MapPin, Phone, AlertTriangle, RefreshCw } from 'lucide-react'
+import { useWebSocket } from '@/hooks/use-websocket'
+import { Building2, MapPin, Phone, AlertTriangle, RefreshCw, Bell } from 'lucide-react'
+// QR generator card removed from the property panel per design feedback
 import { api } from '@/services/api'
-import { isAxiosError } from 'axios'
 
 interface Property {
   id: string
@@ -38,7 +39,7 @@ interface DashboardStats {
 
 export function ManagerDashboardLayout() {
   const { user, logout } = useAuth()
-  const { error: showErrorToast, success: showSuccessToast } = useToast()
+  const { error: showErrorToast, success: showSuccessToast, info: showInfoToast } = useToast()
   const location = useLocation()
   const navigate = useNavigate()
   
@@ -56,6 +57,108 @@ export function ManagerDashboardLayout() {
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const [isMobile, setIsMobile] = useState(false)
+  const [notificationCount, setNotificationCount] = useState(0)
+  const [isRefreshing, setIsRefreshing] = useState(false)
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date>(new Date())
+  const [updateMessage, setUpdateMessage] = useState<string | null>(null)
+  const [lastRefreshTime, setLastRefreshTime] = useState<number>(0)
+  const refreshDebounceDelay = 5000 // 5 seconds minimum between refreshes
+
+  // WebSocket connection for real-time updates
+  const { isConnected, lastMessage, connectionError } = useWebSocket(
+    `${import.meta.env.VITE_API_URL?.replace('https', 'wss').replace('http', 'ws')}/ws/dashboard`,
+    {
+      enabled: !!user && user.role === 'manager',
+      onMessage: (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          console.log('[Manager Dashboard] WebSocket message:', data)
+          
+          // Handle different event types
+          switch (data.type) {
+            case 'application_created':
+            case 'new_application':
+              console.log('[Manager Dashboard] New application received:', data.data)
+              // Refresh all data with visual feedback
+              handleDataRefresh('New application received')
+              showInfoToast('New Application', `New application from ${data.data?.first_name || 'applicant'}`)
+              // Trigger child component refresh via outlet context
+              setLastUpdateTime(new Date())
+              break
+              
+            case 'application_approved':
+            case 'application_rejected':
+            case 'application_status_change':
+              console.log('[Manager Dashboard] Application status changed:', data.data)
+              // Refresh stats and applications list
+              handleDataRefresh('Application status updated')
+              // Update notification if status change affects manager
+              if (data.data?.requires_review) {
+                setNotificationCount(prev => prev + 1)
+              }
+              setLastUpdateTime(new Date())
+              break
+              
+            case 'manager_review_needed':
+              console.log('[Manager Dashboard] Manager review needed:', data.data)
+              // Increment notification count and refresh applications
+              setNotificationCount(prev => prev + 1)
+              handleDataRefresh('New review required')
+              showInfoToast('Review Required', 'New application requires your review')
+              setLastUpdateTime(new Date())
+              break
+              
+            case 'onboarding_completed':
+              console.log('[Manager Dashboard] Onboarding completed:', data.data)
+              // Refresh stats to show completed onboarding
+              handleDataRefresh('Employee onboarding completed')
+              showSuccessToast('Onboarding Complete', `${data.data?.employee_name || 'Employee'} has completed onboarding`)
+              setLastUpdateTime(new Date())
+              break
+              
+            case 'notification':
+            case 'notification_created':
+              console.log('[Manager Dashboard] New notification:', data.data)
+              // Only update notification count, no full refresh needed
+              setNotificationCount(prev => prev + 1)
+              // Add subtle pulse animation to notification bell
+              const bellElement = document.querySelector('.notification-bell')
+              if (bellElement) {
+                bellElement.classList.add('animate-pulse')
+                setTimeout(() => bellElement.classList.remove('animate-pulse'), 3000)
+              }
+              // No full refresh needed for notifications
+              break
+              
+            default:
+              console.log('[Manager Dashboard] Unknown event type:', data.type)
+          }
+        } catch (error) {
+          console.error('[Manager Dashboard] Failed to parse WebSocket message:', error)
+        }
+      },
+      onOpen: () => {
+        console.log('[Manager Dashboard] WebSocket connected')
+      },
+      onClose: (event) => {
+        console.log('[Manager Dashboard] WebSocket disconnected:', event.code, event.reason)
+      },
+      onError: (error) => {
+        console.error('[Manager Dashboard] WebSocket error:', error)
+      }
+    }
+  )
+
+  // Show connection status in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development') {
+      if (isConnected) {
+        console.log('[Manager Dashboard] WebSocket is connected')
+      } else if (connectionError) {
+        console.log('[Manager Dashboard] WebSocket connection error:', connectionError)
+      }
+    }
+  }, [isConnected, connectionError])
 
   // Check if we're on mobile
   useEffect(() => {
@@ -68,10 +171,24 @@ export function ManagerDashboardLayout() {
     return () => window.removeEventListener('resize', checkMobile)
   }, [])
 
+  // Refresh notification count periodically - increased to 60 seconds
+  // WebSocket will handle real-time notification updates
+  useEffect(() => {
+    // Fetch initial count
+    fetchNotificationCount()
+    
+    // Set up interval to refresh every 60 seconds (reduced frequency)
+    const interval = setInterval(() => {
+      fetchNotificationCount()
+    }, 60000) // Changed from 30s to 60s
+    
+    return () => clearInterval(interval)
+  }, [])
+
   const currentSection = navigation.currentSection
 
   useEffect(() => {
-    if (user?.role === 'manager') {
+    if (user) {
       fetchData()
     }
   }, [user, retryCount])
@@ -83,44 +200,100 @@ export function ManagerDashboardLayout() {
     }
   }, [location.pathname, navigate])
 
-  const fetchData = async () => {
+  const fetchNotificationCount = async () => {
     try {
-      setLoading(true)
+      const response = await api.notifications.getCount()
+      if (response.data?.success) {
+        setNotificationCount(response.data.data.unread_count || 0)
+      }
+    } catch (error) {
+      console.error('Failed to fetch notification count:', error)
+    }
+  }
+
+  const fetchData = async (showRefreshIndicator = false) => {
+    try {
+      if (showRefreshIndicator) {
+        setIsRefreshing(true)
+      } else {
+        setLoading(true)
+      }
       setError(null)
-      await Promise.all([fetchPropertyData(), fetchDashboardStats()])
+      await Promise.all([fetchPropertyData(), fetchDashboardStats(), fetchNotificationCount()])
       if (retryCount > 0) {
         showSuccessToast('Dashboard refreshed', 'Data has been updated successfully')
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch dashboard data:', error)
-      const errorMessage = isAxiosError(error)
-        ? error.response?.data?.detail || error.message
-        : 'Failed to load dashboard data'
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to load dashboard data'
       setError(errorMessage)
       showErrorToast('Failed to load dashboard', errorMessage)
     } finally {
       setLoading(false)
+      setIsRefreshing(false)
     }
+  }
+
+  const handleDataRefresh = async (message?: string, force: boolean = false) => {
+    // Implement debouncing - don't refresh if we just did within 5 seconds
+    const now = Date.now()
+    if (!force && now - lastRefreshTime < refreshDebounceDelay) {
+      console.log('[Manager Dashboard] Skipping refresh - too soon since last refresh')
+      // Still show the message to indicate we received the update
+      if (message) {
+        setUpdateMessage(message)
+        setTimeout(() => setUpdateMessage(null), 3000)
+      }
+      return
+    }
+    
+    // Update last refresh time
+    setLastRefreshTime(now)
+    
+    // Show update message briefly
+    if (message) {
+      setUpdateMessage(message)
+      setTimeout(() => setUpdateMessage(null), 3000)
+    }
+    // Refresh data with visual indicator
+    await fetchData(true)
   }
 
   const fetchPropertyData = async () => {
     const response = await api.manager.getMyProperty()
-    const userProperty = response.data
-    console.debug('Manager property payload', userProperty)
-    setProperty(userProperty || null)
+    // API service handles response unwrapping
+    setProperty(response.data || null)
   }
 
   const fetchDashboardStats = async () => {
     const response = await api.manager.getDashboardStats()
-    const statsData = response.data || {}
-
-    setStats({
-      total_applications: statsData.totalApplications ?? statsData.property_applications ?? 0,
-      pending_applications: statsData.pendingApplications ?? 0,
-      approved_applications: statsData.approvedApplications ?? 0,
-      total_employees: statsData.totalEmployees ?? statsData.property_employees ?? 0,
-      active_employees: statsData.activeEmployees ?? 0
+    // API service handles response unwrapping
+    setStats(response.data || {
+      total_applications: 0,
+      pending_applications: 0,
+      approved_applications: 0,
+      total_employees: 0,
+      active_employees: 0
     })
+  }
+
+  // Targeted refresh functions for specific updates
+  const refreshStatsOnly = async () => {
+    try {
+      await fetchDashboardStats()
+      console.log('[Manager Dashboard] Stats refreshed')
+    } catch (error) {
+      console.error('[Manager Dashboard] Failed to refresh stats:', error)
+    }
+  }
+
+  const refreshNotificationsOnly = async () => {
+    try {
+      await fetchNotificationCount()
+      console.log('[Manager Dashboard] Notifications refreshed')
+    } catch (error) {
+      console.error('[Manager Dashboard] Failed to refresh notifications:', error)
+    }
   }
 
   const handleRetry = () => {
@@ -145,7 +318,8 @@ export function ManagerDashboardLayout() {
     )
   }
 
-  // Property assignment check
+  // Property will be fetched from the backend, no need to check property_id in JWT
+
   // Add pending applications badge to navigation items
   const navigationItems = MANAGER_NAVIGATION_ITEMS.map(item => ({
     ...item,
@@ -163,8 +337,40 @@ export function ManagerDashboardLayout() {
             <div className="spacing-xs">
               <h1 className="text-display-md">Manager Dashboard</h1>
               <p className="text-body-md text-secondary">Welcome back, {user.first_name} {user.last_name}</p>
+              {/* WebSocket Connection Status and Update Indicator */}
+              <div className="flex items-center gap-4 mt-2">
+                {process.env.NODE_ENV === 'development' && (
+                  <div className="flex items-center gap-2">
+                    <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'} animate-pulse`} />
+                    <span className="text-xs text-gray-500">
+                      {isConnected ? 'Real-time updates active' : connectionError || 'Connecting...'}
+                    </span>
+                  </div>
+                )}
+                {updateMessage && (
+                  <div className="flex items-center gap-2 animate-slide-in">
+                    <RefreshCw className="h-3 w-3 text-blue-500 animate-spin" />
+                    <span className="text-xs text-blue-600 font-medium">{updateMessage}</span>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-3">
+              {/* Notification Badge */}
+              <button
+                className="notification-bell relative p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                onClick={() => navigate('/manager/notifications')}
+                title="Notifications"
+              >
+                <Bell className="h-5 w-5 text-gray-600" />
+                {notificationCount > 0 && (
+                  <Badge 
+                    className="absolute -top-1 -right-1 h-5 w-5 p-0 flex items-center justify-center bg-red-500 text-white text-xs"
+                  >
+                    {notificationCount > 99 ? '99+' : notificationCount}
+                  </Badge>
+                )}
+              </button>
               {error && (
                 <Button 
                   onClick={handleRetry} 
@@ -185,9 +391,8 @@ export function ManagerDashboardLayout() {
           {/* Breadcrumb Navigation */}
           <div className="mb-6">
             <DashboardBreadcrumb 
-              role="manager" 
-              currentSection={currentSection}
-              propertyName={property?.name}
+              dashboard="Manager"
+              currentPage={currentSection}
             />
           </div>
 
@@ -214,15 +419,19 @@ export function ManagerDashboardLayout() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
                     <div className="flex items-start gap-3">
                       <MapPin className="h-4 w-4 text-gray-400 mt-1 flex-shrink-0" />
                       <div>
                         <p className="text-sm font-medium text-gray-900 mb-1">Address</p>
-                        <p className="text-sm text-gray-600 leading-relaxed">
-                          {property.address}<br />
-                          {property.city}, {property.state} {property.zip_code}
-                        </p>
+                        {property.address || property.city || property.state || property.zip_code ? (
+                          <p className="text-sm text-gray-600 leading-relaxed">
+                            {property.address || ''}{property.address ? <br /> : null}
+                            {[property.city, property.state].filter(Boolean).join(', ')}{(property.city || property.state) && property.zip_code ? ` ${property.zip_code}` : property.zip_code || ''}
+                          </p>
+                        ) : (
+                          <p className="text-sm text-gray-400">Not set</p>
+                        )}
                       </div>
                     </div>
                     {property.phone && (
@@ -234,40 +443,15 @@ export function ManagerDashboardLayout() {
                         </div>
                       </div>
                     )}
-                    <div className="flex items-start gap-3">
-                      <div className="h-4 w-4 mt-1 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 mb-1">Status</p>
-                        <Badge 
-                          variant={property.is_active ? "default" : "secondary"}
-                          className={property.is_active ? "bg-green-100 text-green-800 hover:bg-green-100" : ""}
-                        >
-                          {property.is_active ? "Active" : "Inactive"}
-                        </Badge>
-                      </div>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="h-4 w-4 mt-1 flex-shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900 mb-1">Property ID</p>
-                        <p className="text-sm text-gray-600">{property.id}</p>
-                      </div>
-                    </div>
+                    {/* QR card removed. Managers can use the Applications view QR button. */}
                   </div>
                 </CardContent>
               </Card>
-            ) : !error ? (
-              <Alert variant="default" className="bg-blue-50 border-blue-200">
-                <Building2 className="h-4 w-4 text-blue-500" />
-                <AlertDescription>
-                  {'No property information is currently available for your account. Please contact HR if you believe this is a mistake.'}
-                </AlertDescription>
-              </Alert>
             ) : null}
           </div>
 
-          {/* Stats Cards */}
-          <div className="mb-8">
+          {/* Stats Cards with Refresh Animation */}
+          <div className={`mb-8 transition-opacity duration-300 ${isRefreshing ? 'opacity-70' : 'opacity-100'}`}>
             {loading ? (
               <StatsSkeleton count={4} />
             ) : stats ? (
@@ -333,7 +517,9 @@ export function ManagerDashboardLayout() {
               property,
               onStatsUpdate: fetchData,
               userRole: 'manager',
-              propertyId: user.property_id 
+              propertyId: property?.id,
+              lastUpdateTime,
+              isRefreshing 
             }} />
           </div>
         </div>

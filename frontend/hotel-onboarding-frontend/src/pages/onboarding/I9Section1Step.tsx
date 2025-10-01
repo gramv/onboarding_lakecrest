@@ -8,18 +8,23 @@ import { FormSection } from '@/components/ui/form-section'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useStepValidation } from '@/hooks/useStepValidation'
 import { i9Section1Validator } from '@/utils/stepValidators'
+import { getApiUrl } from '@/config/api'
 
 export default function I9Section1Step({
   currentStep,
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   const [formData, setFormData] = useState<any>({})
@@ -198,7 +203,7 @@ export default function I9Section1Step({
     if (employee?.id && !employee.id.startsWith('demo-')) {
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL || '/api'}/api/onboarding/${employee.id}/i9-section1`,
+          `${getApiUrl()}/onboarding/${employee.id}/i9-section1`,
           {
             method: 'POST',
             headers: {
@@ -267,7 +272,7 @@ export default function I9Section1Step({
     if (employee?.id && !employee.id.startsWith('demo-')) {
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_URL || '/api'}/api/onboarding/${employee.id}/i9-section1`,
+          `${getApiUrl()}/onboarding/${employee.id}/i9-section1`,
           {
             method: 'POST',
             headers: {
@@ -429,7 +434,7 @@ export default function I9Section1Step({
                   onBack={() => setActiveTab('form')}
                   renderPreview={renderFormPreview}
                   usePDFPreview={true}
-                  pdfEndpoint={`${import.meta.env.VITE_API_URL || '/api'}/api/onboarding/${employee?.id}/i9-section1/generate-pdf`}
+                pdfEndpoint={`${getApiUrl()}/onboarding/${employee?.id}/i9-section1/generate-pdf`}
                   pdfUrl={savedPdfUrl}
                   onPdfGenerated={handlePdfGenerated}
                   federalCompliance={{
@@ -443,6 +448,20 @@ export default function I9Section1Step({
             </TabsContent>
           </Tabs>
         </FormSection>
+
+        {/* Navigation */}
+        <NavigationButtons
+          showPrevious={true}
+          showNext={true}
+          onPrevious={goToPreviousStep || (() => {})}
+          onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+          disabled={saveStatus?.saving || !isSigned}
+          saving={saveStatus?.saving}
+          hasErrors={false}
+          language={language}
+          nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+        />
+
         </div>
       </StepContentWrapper>
     </StepContainer>

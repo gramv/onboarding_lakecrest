@@ -14,9 +14,11 @@ import { useSyncStatus } from '@/hooks/useSyncStatus'
 import { getApiUrl } from '@/config/api'
 
 // Import the new infrastructure
-import { OnboardingFlowController, StepProps } from '../controllers/OnboardingFlowController'
+import { OnboardingFlowController, StepProps, NavigationValidationResult } from '../controllers/OnboardingFlowController'
 import { ProgressBar } from '../components/navigation/ProgressBar'
 import { NavigationButtons } from '../components/navigation/NavigationButtons'
+
+type StepContentWithMeta = React.ReactNode & { props?: { canProceed?: boolean } }
 
 // Import new shadcn UI components
 import { StepIndicator, Step } from '@/components/ui/step-indicator'
@@ -38,6 +40,7 @@ import WeaponsPolicyStep from './onboarding/WeaponsPolicyStep'
 import HealthInsuranceStep from './onboarding/HealthInsuranceStep'
 import DocumentUploadStep from './onboarding/DocumentUploadStep'
 import FinalReviewStep from './onboarding/FinalReviewStep'
+import { StepStatus } from '@/types/onboarding'
 
 interface OnboardingFlowPortalProps {
   testMode?: boolean
@@ -53,8 +56,9 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
   const [session, setSession] = useState<any>(null)
   const [currentStep, setCurrentStep] = useState<any>(null)
   const [progress, setProgress] = useState<any>(null)
+  const [stepStates, setStepStates] = useState<Record<string, StepStatus>>({})
   const [language, setLanguage] = useState<'en' | 'es'>('en')
-  const [validationErrors, setValidationErrors] = useState<string[]>([])
+  const [validationMessages, setValidationMessages] = useState<ValidationMessage[]>([])
   const [saveStatus, setSaveStatus] = useState<any>({ saving: false, lastSaved: null, error: null })
 
   const token = searchParams.get('token') || (testMode ? 'demo-token' : null)
@@ -66,6 +70,18 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
   
   // Sync status hook
   const { syncStatus, lastSyncTime, syncError, startSync, syncSuccess, syncError: reportSyncError, syncOffline, isOnline } = useSyncStatus()
+
+  const syncControllerSnapshot = useCallback(() => {
+    try {
+      const nextStep = flowController.getCurrentStep()
+      const nextProgress = flowController.getProgress()
+      setCurrentStep(nextStep)
+      setProgress(nextProgress)
+      setStepStates(nextProgress.stepStates ?? flowController.getStepStates())
+    } catch (error) {
+      console.warn('Unable to sync onboarding flow snapshot:', error)
+    }
+  }, [flowController])
 
   // Initialize session
   useEffect(() => {
@@ -122,8 +138,12 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
 
             setIsSingleStepMode(true)
             setSingleStepTarget(targetStep)
+            const metadata = data?._metadata || {}
+            const hrContactEmail = metadata.hr_contact_email || metadata.hrContactEmail || data?.sessionData?.hrContactEmail
+
             setSingleStepMeta({
-              ...(data?._metadata || {}),
+              ...metadata,
+              hrContactEmail,
               employeeExists: data?.employeeExists,
               sessionId: data?.sessionData?.sessionId,
               recipientEmail: data?.sessionData?.recipientEmail,
@@ -131,8 +151,7 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
             })
 
             setSession(sessionData)
-            setCurrentStep(flowController.getCurrentStep())
-            setProgress(flowController.getProgress())
+            syncControllerSnapshot()
 
             // Attempt to load any locally cached data for the target step
             const savedData = sessionStorage.getItem(`onboarding_${targetStep}_data`)
@@ -160,13 +179,11 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
         setSingleStepTarget(null)
         setSingleStepMeta(null)
         setSession(sessionData)
-        setCurrentStep(flowController.getCurrentStep())
-        setProgress(flowController.getProgress())
-        
+
         // Load saved data from cloud first, then merge with local
         if (sessionData.savedFormData && Object.keys(sessionData.savedFormData).length > 0) {
           console.log('Loading saved form data from cloud:', sessionData.savedFormData)
-          
+
           // Load cloud data and save to sessionStorage
           Object.entries(sessionData.savedFormData).forEach(([stepId, formData]) => {
             if (formData && Object.keys(formData).length > 0) {
@@ -192,7 +209,14 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
             }
           })
         }
-        
+
+        // IMPORTANT: Restore local progress AFTER loading session but BEFORE setting UI state
+        // This ensures completed steps from local storage are merged with backend progress
+        flowController.restoreLocalProgress()
+
+        // Now set UI state with the merged progress
+        syncControllerSnapshot()
+
         setError(null)
       } catch (err) {
         console.error('Failed to initialize onboarding:', err)
@@ -203,7 +227,7 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
     }
 
     initializeSession()
-  }, [token, flowController, mode, requestedStep])
+  }, [token, flowController, mode, requestedStep, syncControllerSnapshot])
 
   // Auto-save management
   useEffect(() => {
@@ -218,68 +242,49 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
     return () => clearInterval(interval)
   }, [session, currentStep, flowController])
 
-  // Step navigation handlers
-  const handleNextStep = useCallback(async () => {
-    try {
-      setValidationErrors([])
-      
-      // Get current form data from session storage for personal-info step
-      let currentStepData = flowController.getStepData(currentStep.id)
-      
-      // Special handling for personal-info, w4-form and direct-deposit steps to get data from session storage
-      if (currentStep.id === 'personal-info' || currentStep.id === 'w4-form' || currentStep.id === 'direct-deposit') {
-        const savedData = sessionStorage.getItem(`onboarding_${currentStep.id}_data`)
-        if (savedData) {
-          try {
-            currentStepData = JSON.parse(savedData)
-            // Update controller with latest data
-            flowController.setStepData(currentStep.id, currentStepData)
-          } catch (e) {
-            console.error('Failed to parse saved data:', e)
-          }
-        }
-      }
-      
-      console.log('Validating step data:', currentStepData)
-      
-      // Validate current step before proceeding
-      const validation = await flowController.validateCurrentStep()
-      
-      if (!validation.valid) {
-        console.log('Validation failed:', validation)
-        setValidationErrors(validation.errors)
-        // Scroll to error container to show validation errors
-        scrollToErrorContainer()
-        return
-      }
-      
-      // Mark step as complete and move to next
-      await flowController.markStepComplete(currentStep.id, currentStepData)
-      flowController.goToNextStep()
-      
-      // Update state
-      setCurrentStep(flowController.getCurrentStep())
-      setProgress(flowController.getProgress())
-      
-      // Scroll to top after successful navigation
-      scrollToTop()
-      
-    } catch (err) {
-      console.error('Failed to proceed to next step:', err)
-      setValidationErrors([err instanceof Error ? err.message : 'Failed to proceed'])
-      // Scroll to error container to show error
-      scrollToErrorContainer()
-    }
-  }, [currentStep, flowController])
-
   const handlePreviousStep = useCallback(() => {
+    setValidationMessages([])
     flowController.goToPreviousStep()
-    setCurrentStep(flowController.getCurrentStep())
-    setProgress(flowController.getProgress())
-    
+    syncControllerSnapshot()
+
     // Scroll to top after navigation
     scrollToTop()
-  }, [flowController])
+  }, [flowController, syncControllerSnapshot])
+
+  // Handle jump navigation to a specific step
+  const handleJumpToStep = useCallback((stepIndex: number) => {
+    setValidationMessages([])
+
+    const targetStep = flowController.steps[stepIndex]
+    if (!targetStep) {
+      return
+    }
+
+    const status = stepStates[targetStep.id] ?? flowController.getStepState(targetStep.id)
+    if (status === 'locked') {
+      return
+    }
+
+    const canNavigate = flowController.canNavigateToStep(stepIndex)
+    if (!canNavigate) {
+      return
+    }
+
+    flowController.setCurrentStepIndex(stepIndex)
+    syncControllerSnapshot()
+    scrollToTop()
+  }, [flowController, stepStates, syncControllerSnapshot])
+
+  // Check if user can navigate to a specific step
+  const canNavigateToStep = useCallback((stepIndex: number): boolean => {
+    const step = flowController.steps[stepIndex]
+    if (!step) return false
+
+    const status = stepStates[step.id] ?? flowController.getStepState(step.id)
+    if (status === 'locked') return false
+
+    return status === 'ready' || status === 'in-progress' || status === 'complete'
+  }, [flowController, stepStates])
 
   const handleSaveProgress = useCallback(async (stepId: string, data?: any) => {
     if (!currentStep) return
@@ -316,11 +321,107 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
   const handleStepComplete = useCallback(async (stepId: string, data?: any) => {
     try {
       await flowController.markStepComplete(stepId, data)
-      setProgress(flowController.getProgress())
+      syncControllerSnapshot()
     } catch (err) {
       console.error('Failed to mark step complete:', err)
     }
-  }, [flowController])
+  }, [flowController, syncControllerSnapshot])
+
+  const advanceCurrentStep = useCallback(async (
+    options?: { overrideData?: any; skipValidation?: boolean }
+  ): Promise<NavigationValidationResult | null> => {
+    if (!currentStep) return null
+
+    try {
+      setValidationMessages([])
+
+      const autoSyncedSteps = ['personal-info', 'w4-form', 'direct-deposit', 'health-insurance', 'company-policies', 'weapons-policy']
+
+      let stepData = options?.overrideData ?? flowController.getStepData(currentStep.id)
+
+      if (options?.overrideData) {
+        flowController.setStepData(currentStep.id, options.overrideData)
+        try {
+          sessionStorage.setItem(`onboarding_${currentStep.id}_data`, JSON.stringify(options.overrideData))
+        } catch (storageError) {
+          console.error('Failed to persist override data to sessionStorage:', storageError)
+        }
+        stepData = options.overrideData
+      } else if (autoSyncedSteps.includes(currentStep.id)) {
+        const savedData = sessionStorage.getItem(`onboarding_${currentStep.id}_data`)
+        if (savedData) {
+          try {
+            stepData = JSON.parse(savedData)
+            flowController.setStepData(currentStep.id, stepData)
+          } catch (e) {
+            console.error('Failed to parse saved data:', e)
+          }
+        }
+      }
+
+      if (!options?.skipValidation) {
+        const validation = await flowController.validateCurrentStep()
+        if (!validation.valid) {
+          const messages: ValidationMessage[] = (validation.errors || []).map(message => ({ message, type: 'error' }))
+          if (messages.length === 0 && validation.fieldErrors) {
+            messages.push(...Object.values(validation.fieldErrors).map(message => ({ message, type: 'error' })))
+          }
+          setValidationMessages(messages)
+          scrollToErrorContainer()
+          return null
+        }
+      }
+
+      await flowController.markStepComplete(currentStep.id, stepData)
+      syncControllerSnapshot()
+
+      const navigationResult = await flowController.advanceToNextStep()
+      if (!navigationResult.allowed) {
+        const messages: ValidationMessage[] = []
+        if (navigationResult.reason) {
+          messages.push({ message: navigationResult.reason, type: 'error' })
+        }
+        if (navigationResult.missing_requirements?.length) {
+          navigationResult.missing_requirements.forEach(req => {
+            messages.push({ message: `Complete step "${req}" before continuing.`, type: 'error' })
+          })
+        }
+        setValidationMessages(messages)
+        scrollToErrorContainer()
+        return navigationResult
+      }
+
+      const warnings: ValidationMessage[] = []
+      const warningMessages = navigationResult.warnings || []
+      warningMessages.forEach(message => {
+        warnings.push({ message, type: 'warning' })
+      })
+
+      if (navigationResult.fallback && navigationResult.reason && !warningMessages.includes(navigationResult.reason)) {
+        warnings.push({ message: navigationResult.reason, type: 'warning' })
+      } else if (navigationResult.fallback && warningMessages.length === 0) {
+        warnings.push({
+          message: 'We could not confirm with the server, but your progress is saved locally. Please refresh once you are back online.',
+          type: 'warning'
+        })
+      }
+
+      setValidationMessages(warnings)
+
+      syncControllerSnapshot()
+      scrollToTop()
+      return navigationResult
+    } catch (err) {
+      console.error('Failed to proceed to next step:', err)
+      setValidationMessages([{ message: err instanceof Error ? err.message : 'Failed to proceed', type: 'error' }])
+      scrollToErrorContainer()
+      return null
+    }
+  }, [currentStep, flowController, syncControllerSnapshot])
+
+  const handleNextStep = useCallback(async (): Promise<NavigationValidationResult | null> => {
+    return advanceCurrentStep()
+  }, [advanceCurrentStep])
 
   // Language change handler
   const handleLanguageChange = useCallback((newLanguage: 'en' | 'es') => {
@@ -337,32 +438,42 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
       throw new Error('Session not properly initialized')
     }
 
+    const baseProps = flowController.getStepProps()
+    const stateMap = baseProps.stepStates ?? stepStates
+    const resolveStepState = baseProps.getStepState ?? ((stepId: string) => stateMap?.[stepId] ?? 'locked')
+
     return {
-      currentStep: {
-        id: currentStep.id,
-        name: currentStep.name,
-        order: currentStep.order,
-        required: currentStep.required
-      },
-      progress: {
-        completedSteps: progress.completedSteps,
-        currentStepIndex: progress.currentStepIndex,
-        totalSteps: progress.totalSteps,
-        percentComplete: progress.percentComplete
-      },
+      ...baseProps,
       markStepComplete: handleStepComplete,
       saveProgress: handleSaveProgress,
-      goToNextStep: handleNextStep,
+      goToNextStep: baseProps.goToNextStep ?? flowController.goToNextStep.bind(flowController),
       goToPreviousStep: handlePreviousStep,
+      advanceToNextStep: async () => {
+        const result = await advanceCurrentStep()
+        return result ?? { allowed: false, reason: 'Navigation blocked' }
+      },
+      completeAndAdvance: async (data?: any, options?: { skipValidation?: boolean; resumeAnchor?: string | null }) => {
+        if (options && Object.prototype.hasOwnProperty.call(options, 'resumeAnchor')) {
+          baseProps.setStepResumeAnchor?.(currentStep.id, options?.resumeAnchor ?? null)
+        }
+        const result = await advanceCurrentStep({
+          overrideData: data,
+          skipValidation: options?.skipValidation
+        })
+        return result ?? { allowed: false, reason: 'Navigation blocked' }
+      },
       language,
       employee: session.employee,
       property: session.property,
       sessionToken: session.sessionToken,
       expiresAt: session.expiresAt,
       isSingleStepMode,
-      singleStepMeta
+      singleStepMeta,
+      canProceedToNext: progress.canProceed,
+      stepStates: stateMap,
+      getStepState: resolveStepState
     }
-  }, [session, currentStep, progress, language, handleStepComplete, handleSaveProgress, handleNextStep, handlePreviousStep, isSingleStepMode, singleStepMeta])
+  }, [session, currentStep, progress, language, handleStepComplete, handleSaveProgress, handlePreviousStep, isSingleStepMode, singleStepMeta, flowController, advanceCurrentStep, stepStates])
 
   // Render step content
   const renderStepContent = () => {
@@ -457,6 +568,29 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
   const completedFederalSteps = federalSteps.filter(step => 
     progress?.completedSteps?.includes(step.id)
   ).length
+  const currentStepStatus: StepStatus | undefined = currentStep
+    ? (stepStates[currentStep.id] ?? flowController.getStepState(currentStep.id))
+    : undefined
+  const isCurrentStepComplete = currentStepStatus === 'complete'
+  const canAdvanceFromCurrentStep = Boolean(progress?.canProceed)
+  const content = renderStepContent() as StepContentWithMeta
+  const renderedContent = (
+    <ErrorBoundary>
+      {content}
+    </ErrorBoundary>
+  )
+  const currentStepCanProceed = (() => {
+    if (content?.props && Object.prototype.hasOwnProperty.call(content.props, 'canProceed')) {
+      return Boolean(content.props.canProceed)
+    }
+
+    const containerElement = document.querySelector('[data-step-container]') as HTMLElement | null
+    if (containerElement && containerElement.dataset.canProceed) {
+      return containerElement.dataset.canProceed === 'true'
+    }
+
+    return true
+  })()
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
@@ -523,36 +657,45 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
         </div>
       )}
 
-      {/* Progress Bar */}
+      {/* Global Progress Bar - Sticky */}
       {progress && !isSingleStepMode && (
-        <ProgressBar
-          steps={flowController.steps}
-          currentStep={progress.currentStepIndex}
-          completedSteps={progress.completedSteps}
-          percentComplete={progress.percentComplete}
-          estimatedTimeRemaining={flowController.steps
-            .slice(progress.currentStepIndex)
-            .reduce((total, step) => total + step.estimatedMinutes, 0)}
-          federalStepsCompleted={completedFederalSteps}
-          totalFederalSteps={federalSteps.length}
-        />
+        <div className="sticky top-0 z-40 bg-white shadow-md">
+          <ProgressBar
+            steps={flowController.steps}
+            currentStep={progress.currentStepIndex}
+            completedSteps={progress.completedSteps}
+            percentComplete={progress.percentComplete}
+            estimatedTimeRemaining={flowController.steps
+              .slice(progress.currentStepIndex)
+              .reduce((total, step) => total + step.estimatedMinutes, 0)}
+            federalStepsCompleted={completedFederalSteps}
+            totalFederalSteps={federalSteps.length}
+            onStepClick={handleJumpToStep}
+            canNavigateToStep={canNavigateToStep}
+            stepStates={stepStates}
+          />
+          {/* Enhanced Progress Info for Mobile */}
+          <div className="md:hidden px-4 py-2 border-t border-gray-200 bg-gray-50">
+            <div className="flex justify-between items-center text-xs text-gray-600">
+              <span>Step {progress.currentStepIndex + 1} of {flowController.steps.length}</span>
+              <span>{progress.percentComplete}% Complete</span>
+            </div>
+          </div>
+        </div>
       )}
 
-      {/* Main Content */}
-      <main className="flex-1 py-6">
+      {/* Main Content - Added pb-28 on mobile to account for sticky navigation */}
+      <main className="flex-1 py-6 pb-28 sm:pb-6">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 space-y-6">
 
           {/* Step Content */}
           <Card className="card-transition fade-in">
             <CardContent className="pt-6">
               {/* Validation Errors */}
-              {validationErrors.length > 0 && (
+              {validationMessages.length > 0 && (
                 <div id="error-container" className="mb-6">
                   <ValidationSummary
-                    messages={validationErrors.map((error) => ({
-                      message: error,
-                      type: 'error'
-                    } as ValidationMessage))}
+                    messages={validationMessages}
                     title="Please fix the following issues"
                     showIcon={true}
                     className="transition-all duration-300"
@@ -561,26 +704,30 @@ export default function OnboardingFlowPortal({ testMode = false }: OnboardingFlo
               )}
 
               {/* Step Content */}
-              <ErrorBoundary>
-                {renderStepContent()}
-              </ErrorBoundary>
+              {renderedContent}
 
-              {/* Navigation */}
-              {progress && !isSingleStepMode && (
+              {/* Navigation - Always visible for both regular and single-step modes */}
+              {progress && (
                 <NavigationButtons
                   showPrevious={progress.currentStepIndex > 0}
                   showNext={progress.currentStepIndex < progress.totalSteps - 1}
                   showSave={false} // Auto-save handles this
                   nextButtonText={
-                    progress.currentStepIndex === progress.totalSteps - 1 
-                      ? 'Submit' 
+                    progress.currentStepIndex === progress.totalSteps - 1
+                      ? 'Submit'
                       : 'Next'
                   }
                   onPrevious={handlePreviousStep}
                   onNext={handleNextStep}
                   saving={saveStatus.saving}
-                  hasErrors={validationErrors.length > 0}
+                  hasErrors={validationMessages.some(msg => msg.type === 'error')}
                   language={language}
+                  disabled={saveStatus.saving || !canAdvanceFromCurrentStep || !currentStepCanProceed}
+                  stepStatus={currentStepStatus}
+                  sticky
+                  currentStep={progress.currentStepIndex}
+                  totalSteps={progress.totalSteps}
+                  progress={progress.percentComplete}
                 />
               )}
             </CardContent>

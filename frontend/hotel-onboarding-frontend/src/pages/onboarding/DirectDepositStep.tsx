@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { getApiUrl, getLegacyBaseUrl } from '@/config/api'
+import { getApiUrl } from '@/config/api'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import DirectDepositFormEnhanced from '@/components/DirectDepositFormEnhanced'
@@ -16,17 +16,23 @@ import { ValidationSummary } from '@/components/ui/validation-summary'
 import { FormSection } from '@/components/ui/form-section'
 import axios from 'axios'
 import { secureStorage } from '@/services/SecureStorageService'
+import { savePDFToStorage, getLatestPDFForStep } from '@/services/pdfStorage'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 
 export default function DirectDepositStep({
   currentStep,
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
   property,
   isSingleStepMode = false,
-  singleStepMeta
+  singleStepMeta,
+  sessionToken,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
 
   const [formData, setFormData] = useState<any>({})
@@ -36,62 +42,181 @@ export default function DirectDepositStep({
   const [pdfUrl, setPdfUrl] = useState<string | null>(null)
   const [ssnFromI9, setSsnFromI9] = useState<string>('')
 
+  const hrContactEmail = singleStepMeta?.hrContactEmail || singleStepMeta?.hr_contact_email
+
+  const sendSingleStepNotifications = async (pdfBase64: string, completionPayload: any) => {
+    if (!isSingleStepMode || !singleStepMeta?.sessionId || !sessionToken || !employee?.id || !pdfBase64) {
+      return
+    }
+
+    const apiUrl = getApiUrl()
+    const employeeAny = employee as Record<string, any>
+    const fullName = [employeeAny?.firstName || employeeAny?.first_name, employeeAny?.lastName || employeeAny?.last_name]
+      .filter(Boolean)
+      .join(' ')
+      .trim() || 'Employee'
+
+    if (hrContactEmail) {
+      try {
+        const emailEndpoint = `${apiUrl}/onboarding/${singleStepMeta.sessionId}/step/direct-deposit/email-documents?token=${encodeURIComponent(sessionToken)}`
+        const emailForm = new FormData()
+        emailForm.append('hr_email', hrContactEmail)
+        emailForm.append('form_pdf_base64', pdfBase64)
+        emailForm.append('employee_name', fullName)
+
+        if (employeeAny?.email) {
+          emailForm.append('employee_email', employeeAny.email)
+        }
+
+        const directDepositData = completionPayload?.formData || completionPayload || {}
+        const voidedDoc = directDepositData?.voidedCheckDocument
+        if (voidedDoc?.document_id) {
+          emailForm.append('voided_check_document_id', voidedDoc.document_id)
+          if (voidedDoc.original_filename) {
+            emailForm.append('voided_check_filename', voidedDoc.original_filename)
+          }
+        }
+
+        const bankLetterDoc = directDepositData?.bankLetterDocument
+        if (bankLetterDoc?.document_id) {
+          emailForm.append('bank_letter_document_id', bankLetterDoc.document_id)
+          if (bankLetterDoc.original_filename) {
+            emailForm.append('bank_letter_filename', bankLetterDoc.original_filename)
+          }
+        }
+
+        await fetch(emailEndpoint, {
+          method: 'POST',
+          body: emailForm
+        })
+      } catch (error) {
+        console.error('Failed to email HR with direct deposit packet:', error)
+      }
+    }
+
+    try {
+      await fetch(`${apiUrl}/onboarding/single-step/notify-completion`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          employee_id: employee.id,
+          step_id: currentStep.id,
+          step_name: currentStep.name,
+          pdf_data: pdfBase64,
+          property_id: property?.id,
+          session_id: singleStepMeta.sessionId,
+          hr_email: hrContactEmail,
+          recipient_email: singleStepMeta?.recipientEmail || undefined
+        })
+      })
+    } catch (error) {
+      console.error('Failed to notify single-step completion for direct deposit:', error)
+    }
+  }
+
+  // Try to restore PDF from IndexedDB if we have one stored
+  React.useEffect(() => {
+    if (!isSingleStepMode && !pdfUrl) {
+      ;(async () => {
+        const storedPdf = await getLatestPDFForStep(currentStep.id)
+        if (storedPdf) {
+          setPdfUrl(storedPdf)
+          console.log('DirectDepositStep - Restored PDF from IndexedDB')
+        }
+      })()
+    }
+  }, [currentStep.id, isSingleStepMode])
+
   // Try to retrieve SSN from PersonalInfoStep or I9 form data stored in session
+  // FIXED: Use regular sessionStorage.getItem() instead of secureStorage (matches I9Section1Step pattern)
   React.useEffect(() => {
     console.log('DirectDepositStep - Starting SSN retrieval...')
-    (async () => {
-      try {
-        // First try PersonalInfoStep data (where SSN is initially entered)
-        const personalData = await secureStorage.secureRetrieve<any>('onboarding_personal-info_data')
-        console.log('DirectDepositStep - Personal info data exists:', !!personalData)
-        if (personalData) {
-          const ssn = personalData?.personalInfo?.ssn || personalData?.ssn || ''
-          console.log('DirectDepositStep - Personal info parsed SSN:', ssn ? ssn.replace(/./g, '*').slice(-4) : 'NOT FOUND')
-          if (ssn) {
-            console.log('DirectDepositStep - Retrieved SSN from PersonalInfo data')
-            setSsnFromI9(ssn)
-            return
-          }
-        }
+    try {
+      // First try PersonalInfoStep data (regular sessionStorage - where SSN is actually saved)
+      const personalInfoData = sessionStorage.getItem('onboarding_personal-info_data')
+      console.log('DirectDepositStep - Personal info data exists:', !!personalInfoData)
 
-        // Fallback to I9 form data if not in PersonalInfo
-        const i9Data = await secureStorage.secureRetrieve<any>('onboarding_i9-form_data')
-        console.log('DirectDepositStep - I9 form data exists:', !!i9Data)
-        if (i9Data) {
-          const ssn = i9Data?.personalInfo?.ssn || i9Data?.ssn || ''
-          console.log('DirectDepositStep - I9 form parsed SSN:', ssn ? ssn.replace(/./g, '*').slice(-4) : 'NOT FOUND')
-          if (ssn) {
-            console.log('DirectDepositStep - Retrieved SSN from I9 form data')
-            setSsnFromI9(ssn)
-          }
-        }
+      if (personalInfoData) {
+        const parsedData = JSON.parse(personalInfoData)
+        console.log('DirectDepositStep - Parsed personal info structure:', Object.keys(parsedData))
 
-        // Additional fallback: check I9 complete step data
-        const i9CompleteData = await secureStorage.secureRetrieve<any>('onboarding_i9-complete_data')
-        console.log('DirectDepositStep - I9 complete data exists:', !!i9CompleteData)
-        if (i9CompleteData) {
-          const ssn = i9CompleteData?.formData?.ssn || i9CompleteData?.ssn || ''
-          console.log('DirectDepositStep - I9 complete parsed SSN:', ssn ? ssn.replace(/./g, '*').slice(-4) : 'NOT FOUND')
-          if (ssn) {
-            console.log('DirectDepositStep - Retrieved SSN from I9 Complete data')
-            setSsnFromI9(ssn)
-          }
-        }
+        // SSN can be at parsedData.personalInfo.ssn or parsedData.ssn
+        const personalInfo = parsedData.personalInfo || parsedData
+        const ssn = personalInfo?.ssn || ''
 
-        console.log('DirectDepositStep - SSN retrieval complete. Final SSN:', ssnFromI9 ? ssnFromI9.replace(/./g, '*').slice(-4) : 'NOT FOUND')
-      } catch (e) {
-        console.error('Failed to retrieve SSN from session data:', e)
+        console.log('DirectDepositStep - Personal info parsed SSN:', ssn ? '****' + ssn.slice(-4) : 'NOT FOUND')
+        if (ssn) {
+          console.log('DirectDepositStep - ✅ Retrieved SSN from PersonalInfo data')
+          setSsnFromI9(ssn)
+          return
+        }
       }
-    })()
+
+      // Fallback to I9 Section 1 data (also regular sessionStorage)
+      const i9Section1Data = sessionStorage.getItem('onboarding_i9-section1_data')
+      console.log('DirectDepositStep - I9 Section 1 data exists:', !!i9Section1Data)
+
+      if (i9Section1Data) {
+        const parsedData = JSON.parse(i9Section1Data)
+        const ssn = parsedData?.formData?.ssn || parsedData?.ssn || ''
+
+        console.log('DirectDepositStep - I9 Section 1 parsed SSN:', ssn ? '****' + ssn.slice(-4) : 'NOT FOUND')
+        if (ssn) {
+          console.log('DirectDepositStep - ✅ Retrieved SSN from I9 Section 1 data')
+          setSsnFromI9(ssn)
+          return
+        }
+      }
+
+      // Additional fallback: check I9 complete step data
+      const i9CompleteData = sessionStorage.getItem('onboarding_i9-complete_data')
+      console.log('DirectDepositStep - I9 complete data exists:', !!i9CompleteData)
+
+      if (i9CompleteData) {
+        const parsedData = JSON.parse(i9CompleteData)
+        const ssn = parsedData?.personalInfo?.ssn || parsedData?.formData?.ssn || parsedData?.ssn || ''
+
+        console.log('DirectDepositStep - I9 complete parsed SSN:', ssn ? '****' + ssn.slice(-4) : 'NOT FOUND')
+        if (ssn) {
+          console.log('DirectDepositStep - ✅ Retrieved SSN from I9 Complete data')
+          setSsnFromI9(ssn)
+          return
+        }
+      }
+
+      console.log('DirectDepositStep - ❌ SSN not found in any sessionStorage location')
+    } catch (e) {
+      console.error('Failed to retrieve SSN from session data:', e)
+    }
   }, [])
 
   // Stable extra data for PDF generation
-  const extraPdfData = React.useMemo(() => ({
-    firstName: employee?.firstName || (employee as any)?.first_name,
-    lastName: employee?.lastName || (employee as any)?.last_name,
-    email: (employee as any)?.email,
-    ssn: ssnFromI9 || (formData as any)?.ssn || ''
-  }), [employee?.firstName, (employee as any)?.first_name, employee?.lastName, (employee as any)?.last_name, (employee as any)?.email, ssnFromI9, (formData as any)?.ssn])
+  const extraPdfData = React.useMemo(() => {
+    // Get firstName and lastName from PersonalInfoStep sessionStorage (matches SSN pattern)
+    let firstName = employee?.firstName || (employee as any)?.first_name || ''
+    let lastName = employee?.lastName || (employee as any)?.last_name || ''
+
+    try {
+      const personalInfoData = sessionStorage.getItem('onboarding_personal-info_data')
+      if (personalInfoData) {
+        const parsedData = JSON.parse(personalInfoData)
+        const personalInfo = parsedData.personalInfo || parsedData
+
+        // Use names from PersonalInfoStep if available
+        if (personalInfo?.firstName) firstName = personalInfo.firstName
+        if (personalInfo?.lastName) lastName = personalInfo.lastName
+      }
+    } catch (err) {
+      console.warn('Failed to retrieve names from PersonalInfoStep:', err)
+    }
+
+    return {
+      firstName,
+      lastName,
+      email: (employee as any)?.email,
+      ssn: ssnFromI9 || (formData as any)?.ssn || ''
+    }
+  }, [employee?.firstName, (employee as any)?.first_name, employee?.lastName, (employee as any)?.last_name, (employee as any)?.email, ssnFromI9, (formData as any)?.ssn])
 
   // Validation hook
   const { errors, fieldErrors, validate } = useStepValidation(directDepositValidator)
@@ -335,7 +460,9 @@ export default function DirectDepositStep({
     }
 
     // Save to secure session storage with signed status and flat structure
-    await secureStorage.secureStore(`onboarding_${currentStep.id}_data`, {
+    // For single-step mode, we need the PDF for email notifications
+    // For regular mode, avoid storing PDF to prevent sessionStorage quota issues
+    const dataToStore = {
       ...(formData.primaryAccount || {}), // Include flattened data
       ...formData,
       formData,
@@ -344,14 +471,31 @@ export default function DirectDepositStep({
       showReview: false,
       signed: true,
       signatureData,
-      pdfUrl: generatedPdfUrl || pdfUrl,
       completedAt: completeData.completedAt
-    })
+    }
+
+    if (isSingleStepMode) {
+      // Single-step mode needs PDF for email notifications
+      dataToStore.pdfUrl = generatedPdfUrl || pdfUrl
+    } else {
+      // Regular mode: Use IndexedDB for PDF storage to avoid quota issues
+      if (finalPdfUrl) {
+        const { pdfId, stored } = await savePDFToStorage(currentStep.id, finalPdfUrl, employee?.id)
+        dataToStore.pdfId = pdfId
+        dataToStore.pdfStored = stored
+      }
+      dataToStore.pdfGenerated = true
+      dataToStore.pdfGeneratedAt = new Date().toISOString()
+    }
+
+    await secureStorage.secureStore(`onboarding_${currentStep.id}_data`, dataToStore)
 
     // Save progress to update controller's step data
     await saveProgress(currentStep.id, completeData)
 
     await markStepComplete(currentStep.id, completeData)
+
+    await sendSingleStepNotifications(finalPdfUrl || pdfUrl || '', completeData)
     setShowReview(false)
   }
 
@@ -435,6 +579,19 @@ export default function DirectDepositStep({
                 </div>
               </CardContent>
             </Card>
+
+            {/* Navigation */}
+            <NavigationButtons
+              showPrevious={true}
+              showNext={true}
+              onPrevious={goToPreviousStep || (() => {})}
+              onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+              disabled={saveStatus?.saving}
+              saving={saveStatus?.saving}
+              hasErrors={false}
+              language={language}
+              nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+            />
           </div>
         </StepContentWrapper>
       </StepContainer>
@@ -560,10 +717,24 @@ export default function DirectDepositStep({
                 }}
                 employee={employee}
                 property={property}
+                employeeSSN={ssnFromI9}
               />
             </div>
           </div>
         </FormSection>
+
+        {/* Navigation */}
+        <NavigationButtons
+          showPrevious={true}
+          showNext={true}
+          onPrevious={goToPreviousStep || (() => {})}
+          onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+          disabled={saveStatus?.saving || !isValid}
+          saving={saveStatus?.saving}
+          hasErrors={false}
+          language={language}
+          nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
+        />
         </div>
       </StepContentWrapper>
     </StepContainer>

@@ -50,6 +50,8 @@ export async function generateCleanW4Pdf(formData: W4FormData): Promise<Uint8Arr
     const form = pdfDoc.getForm()
     
     // SECTION 1: Fill employee information
+    const dependentsCredit = (Number(formData.qualifying_children) || 0) * 2000
+    const otherDependentsCredit = (Number(formData.other_dependents) || 0) * 500
     const section1Fields = {
       // Personal Information - Step 1
       'topmostSubform[0].Page1[0].Step1a[0].f1_01[0]': formData.first_name || '',
@@ -59,18 +61,19 @@ export async function generateCleanW4Pdf(formData: W4FormData): Promise<Uint8Arr
       'topmostSubform[0].Page1[0].f1_05[0]': formData.ssn || '',
       
       // Step 3 - Dependents (if any)
-      'topmostSubform[0].Page1[0].Step3_ReadOrder[0].f1_06[0]': formData.qualifying_children > 0 ? String(formData.qualifying_children * 2000) : '',
-      'topmostSubform[0].Page1[0].Step3_ReadOrder[0].f1_07[0]': formData.other_dependents > 0 ? String(formData.other_dependents * 500) : '',
+      'topmostSubform[0].Page1[0].Step3_ReadOrder[0].f1_06[0]': String(dependentsCredit),
+      'topmostSubform[0].Page1[0].Step3_ReadOrder[0].f1_07[0]': String(otherDependentsCredit),
+      'topmostSubform[0].Page1[0].f1_09[0]': String(dependentsCredit + otherDependentsCredit),
       
       // Step 4 - Other Adjustments
-      'topmostSubform[0].Page1[0].f1_09[0]': formData.other_income || '',
-      'topmostSubform[0].Page1[0].f1_10[0]': formData.deductions || '',
-      'topmostSubform[0].Page1[0].f1_11[0]': formData.extra_withholding || '',
+      'topmostSubform[0].Page1[0].f1_10[0]': formData.other_income ? String(formData.other_income) : '0',
+      'topmostSubform[0].Page1[0].f1_11[0]': formData.deductions ? String(formData.deductions) : '0',
+      'topmostSubform[0].Page1[0].f1_12[0]': formData.extra_withholding ? String(formData.extra_withholding) : '0',
     }
     
     // Fill text fields
     for (const [fieldName, value] of Object.entries(section1Fields)) {
-      if (value) {
+      if (value !== undefined && value !== null) {
         try {
           const field = form.getTextField(fieldName)
           field.setText(value)
@@ -88,12 +91,15 @@ export async function generateCleanW4Pdf(formData: W4FormData): Promise<Uint8Arr
         'married_filing_jointly': 'topmostSubform[0].Page1[0].c1_1[1]',
         'head_of_household': 'topmostSubform[0].Page1[0].c1_1[2]'
       }
-      
+
       const checkboxField = filingStatusFields[formData.filing_status as keyof typeof filingStatusFields]
+
       if (checkboxField) {
         const checkbox = form.getCheckBox(checkboxField)
         checkbox.check()
-        console.log(`✓ Checked filing status: ${formData.filing_status}`)
+        console.log(`✓ Checked filing status: ${formData.filing_status} -> ${checkboxField}`)
+      } else {
+        console.log(`❌ No matching checkbox field for filing status: "${formData.filing_status}"`)
       }
     } catch (e) {
       console.log('⚠️ Could not set filing status checkbox:', e)
@@ -161,14 +167,15 @@ export async function generateCleanW4Pdf(formData: W4FormData): Promise<Uint8Arr
         
         // Add date text next to signature
         // The form field f1_14[0] is filled, but we also need visual text
+        // Coordinates adjusted: half inch right (+36) and half inch up (+36)
         try {
           firstPage.drawText(dateFormatted, {
-            x: 390,  // Position at the date field location based on field mapping
-            y: 82,   // Align with signature line (slightly below signature)
+            x: 426,  // 390 + 36 (half inch right)
+            y: 118,  // 82 + 36 (half inch up)
             size: 10,
             color: rgb(0, 0, 0),
           })
-          console.log('✓ Added date next to signature')
+          console.log('✓ Added date next to signature at adjusted position (426, 118)')
         } catch (e) {
           console.log('⚠️ Could not add date text:', e)
         }
@@ -178,14 +185,129 @@ export async function generateCleanW4Pdf(formData: W4FormData): Promise<Uint8Arr
       }
     }
     
+    try {
+      form.updateFieldAppearances()
+    } catch (appearanceError) {
+      console.log('⚠️ Could not update field appearances:', appearanceError)
+    }
+
     // Save the PDF
-    const pdfBytes = await pdfDoc.save()
+    const pdfBytes = await pdfDoc.save({ updateFieldAppearances: false })
     console.log('=== W-4 PDF GENERATION COMPLETE ===')
     
     return pdfBytes
     
   } catch (error) {
     console.error('Error generating W-4 PDF:', error)
+    throw error
+  }
+}
+
+/**
+ * Add signature to an existing W-4 PDF (overlay signature without regenerating)
+ * This function takes an already-generated W-4 preview PDF and overlays the signature
+ */
+export async function addSignatureToExistingW4Pdf(existingPdfBase64: string, signatureData: any): Promise<string> {
+  console.log('Adding signature to existing W-4 PDF preview')
+
+  try {
+    // Clean base64 string (remove data URL prefix if present)
+    const cleanedBase64 = existingPdfBase64.startsWith('data:')
+      ? existingPdfBase64.split(',')[1]
+      : existingPdfBase64
+
+    // Convert base64 to bytes and load PDF
+    const pdfBytes = Uint8Array.from(atob(cleanedBase64), c => c.charCodeAt(0))
+    const pdfDoc = await PDFDocument.load(pdfBytes)
+
+    console.log('🖊️ Processing signature for W-4 PDF...')
+    const processedSignature = await processSignatureForPDF(signatureData.signature)
+    console.log('✅ Signature processed, embedding in PDF...')
+
+    // Extract base64 data from processed signature
+    const base64Data = processedSignature.split(',')[1]
+    const signatureImageBytes = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0))
+
+    console.log('📊 W-4 Signature embedding details:', {
+      originalDataUrl: signatureData.signature.substring(0, 50) + '...',
+      processedDataUrl: processedSignature.substring(0, 50) + '...',
+      base64Length: base64Data.length,
+      bytesLength: signatureImageBytes.length,
+      isPNG: processedSignature.startsWith('data:image/png')
+    })
+
+    // Embed signature image as PNG
+    const signatureImage = await pdfDoc.embedPng(signatureImageBytes)
+    console.log('✅ Signature embedded in W-4 PDF successfully:', {
+      width: signatureImage.width,
+      height: signatureImage.height
+    })
+
+    // Get first page
+    const pages = pdfDoc.getPages()
+    const firstPage = pages[0]
+
+    // W-4 signature position - matching the coordinates from generateCleanW4Pdf
+    // Note: pdf-lib uses bottom-left origin
+    const scale = 0.25
+    const scaledWidth = signatureImage.width * scale
+    const scaledHeight = signatureImage.height * scale
+
+    const signatureX = 100  // Left side of signature field
+    const signatureY = 102  // From bottom (792 - 690 = 102) - aligned with Step 5
+
+    console.log('🎯 Drawing signature at W-4 coordinates:', {
+      x: signatureX,
+      y: signatureY,
+      width: scaledWidth,
+      height: scaledHeight,
+      originalImageSize: { width: signatureImage.width, height: signatureImage.height }
+    })
+
+    // Draw signature on PDF
+    firstPage.drawImage(signatureImage, {
+      x: signatureX,
+      y: signatureY,
+      width: scaledWidth,
+      height: scaledHeight,
+      opacity: 1.0  // Ensure full opacity for non-transparent pixels
+    })
+
+    console.log('✅ Signature drawn successfully on W-4 PDF')
+
+    // Add date text next to signature
+    const signatureDate = signatureData?.signedAt ? new Date(signatureData.signedAt) : new Date()
+    const dateFormatted = `${(signatureDate.getMonth() + 1).toString().padStart(2, '0')}/${signatureDate.getDate().toString().padStart(2, '0')}/${signatureDate.getFullYear()}`
+
+    try {
+      firstPage.drawText(dateFormatted, {
+        x: 426,  // 390 + 36 (half inch right)
+        y: 118,  // 82 + 36 (half inch up)
+        size: 10,
+        color: rgb(0, 0, 0),
+      })
+      console.log('✅ Added date next to signature:', dateFormatted, 'at position (426, 118)')
+    } catch (e) {
+      console.log('⚠️ Could not add date text:', e)
+    }
+
+    // Save the signed PDF
+    const signedPdfBytes = await pdfDoc.save()
+
+    // Convert to base64 string efficiently (in chunks to avoid stack overflow)
+    let binary = ''
+    const chunkSize = 8192
+    for (let i = 0; i < signedPdfBytes.length; i += chunkSize) {
+      const chunk = signedPdfBytes.slice(i, i + chunkSize)
+      binary += String.fromCharCode.apply(null, Array.from(chunk))
+    }
+
+    const base64String = btoa(binary)
+    console.log('✓ Signature added to W-4 PDF preview, base64 length:', base64String.length)
+    return base64String
+
+  } catch (error) {
+    console.error('Error adding signature to existing W-4 PDF:', error)
     throw error
   }
 }

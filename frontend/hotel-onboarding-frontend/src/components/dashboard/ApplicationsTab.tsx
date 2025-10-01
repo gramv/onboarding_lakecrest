@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react'
 import { useOutletContext } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Textarea } from '@/components/ui/textarea'
@@ -16,7 +17,10 @@ import { ExportColumn } from '@/components/ui/data-export'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useAuth } from '@/contexts/AuthContext'
-import { Search, Eye, CheckCircle, XCircle, Clock, Filter, Users, Mail, RotateCcw, RefreshCw } from 'lucide-react'
+import { Search, Eye, CheckCircle, XCircle, Clock, Filter, Users, Mail, RotateCcw, RefreshCw, AlertCircle } from 'lucide-react'
+import { QRCodeDisplay } from '@/components/ui/qr-code-display'
+import { apiClient } from '@/services/api'
+import { getApiUrl } from '@/config/api'
 import axios from 'axios'
 
 interface JobApplication {
@@ -53,7 +57,6 @@ interface TalentPoolCandidate {
 interface ApplicationsTabProps {
   userRole: 'hr' | 'manager'
   propertyId?: string
-  propertyName?: string
   onStatsUpdate?: () => void
 }
 
@@ -65,11 +68,98 @@ interface OutletContext {
   propertyId?: string
 }
 
-export function ApplicationsTab({ userRole: propUserRole, propertyId: propPropertyId, propertyName: propPropertyName, onStatsUpdate: propOnStatsUpdate }: ApplicationsTabProps) {
-  const outletContext = useOutletContext<OutletContext>()
+// Helper function to translate stored values to display values
+function translateStoredValue(value: string | boolean | undefined | null, type: string): string {
+  if (value === null || value === undefined || value === '') return '—'
+
+  // Boolean or yes/no values
+  if (type === 'boolean' || type === 'yesno') {
+    if (value === true || value === 'yes' || value === 'sí') return 'Yes'
+    if (value === false || value === 'no') return 'No'
+    return String(value)
+  }
+
+  // Employment type
+  if (type === 'employment_type') {
+    const types: Record<string, string> = {
+      'full_time': 'Full-Time',
+      'part_time': 'Part-Time',
+      'seasonal': 'Seasonal',
+      'temporary': 'Temporary'
+    }
+    return types[String(value)] || String(value)
+  }
+
+  // Shift preference
+  if (type === 'shift') {
+    const shifts: Record<string, string> = {
+      'morning': 'Morning',
+      'afternoon': 'Afternoon',
+      'evening': 'Evening',
+      'night': 'Night',
+      'flexible': 'Flexible',
+      'any': 'Any'
+    }
+    return shifts[String(value)] || String(value)
+  }
+
+  // Gender
+  if (type === 'gender') {
+    const genders: Record<string, string> = {
+      'male': 'Male',
+      'female': 'Female',
+      'non-binary': 'Non-Binary',
+      'prefer_not_to_say': 'Prefer not to say',
+      'hombre': 'Male',
+      'mujer': 'Female',
+      'no_binario': 'Non-Binary',
+      'prefiero_no_decir': 'Prefer not to say'
+    }
+    return genders[String(value)] || String(value)
+  }
+
+  // Veteran status
+  if (type === 'veteran_status') {
+    const statuses: Record<string, string> = {
+      'yes': 'Yes',
+      'no': 'No',
+      'prefer_not_to_say': 'Prefer not to say',
+      'sí': 'Yes',
+      'prefiero_no_decir': 'Prefer not to say'
+    }
+    return statuses[String(value)] || String(value)
+  }
+
+  // Disability status
+  if (type === 'disability_status') {
+    const statuses: Record<string, string> = {
+      'yes': 'Yes',
+      'no': 'No',
+      'prefer_not_to_say': 'Prefer not to say',
+      'sí': 'Yes',
+      'prefiero_no_decir': 'Prefer not to say'
+    }
+    return statuses[String(value)] || String(value)
+  }
+
+  return String(value)
+}
+
+export function ApplicationsTab({ userRole: propUserRole, propertyId: propPropertyId, onStatsUpdate: propOnStatsUpdate }: ApplicationsTabProps) {
+  const { t, i18n } = useTranslation()
+
+  // Safely get outlet context without causing hook errors
+  let outletContext: OutletContext | undefined
+  try {
+    outletContext = useOutletContext<OutletContext>()
+  } catch (error) {
+    // Context might not be available when navigating directly
+    console.log('ApplicationsTab: No outlet context available')
+  }
+
   const userRole = propUserRole || outletContext?.userRole || 'hr'
   const propertyId = propPropertyId || outletContext?.propertyId
-  const property = outletContext?.property
+  const currentProperty = outletContext?.property
   const onStatsUpdate = propOnStatsUpdate || outletContext?.onStatsUpdate || (() => {})
   const { user, token } = useAuth()
   const [applications, setApplications] = useState<JobApplication[]>([])
@@ -129,8 +219,8 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
       setLoading(true)
       // Use different endpoints based on user role
       const endpoint = userRole === 'hr' 
-        ? '/api/hr/applications'
-        : '/api/manager/applications'
+        ? '/hr/applications'
+        : '/manager/applications'
       
       console.log('🔍 Fetching applications:', {
         userRole,
@@ -138,8 +228,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
         token: token ? `${token.substring(0, 20)}...` : 'No token'
       })
       
-      const response = await axios.get(endpoint, {
-        headers: { Authorization: `Bearer ${token}` },
+      const response = await apiClient.get(endpoint, {
         params: {
           search: searchQuery || undefined,
           status: statusFilter !== 'all' ? statusFilter : undefined,
@@ -148,45 +237,17 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
         }
       })
 
-      const payload = response.data
-      const applicationsResponse = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload?.data)
-        ? payload.data
-        : []
+      const payload: any[] = Array.isArray(response.data)
+        ? response.data
+        : (Array.isArray(response.data?.data) ? response.data.data : [])
 
       console.log('✅ Applications fetched:', {
-        count: applicationsResponse.length,
-        pending: applicationsResponse.filter((app: any) => app.status === 'pending').length
+        count: payload.length,
+        pending: payload.filter((app: any) => app.status === 'pending').length
       })
       
-      const propertyLookup = new Map<string, string>()
-      if (property?.id && property?.name) {
-        propertyLookup.set(property.id, property.name)
-      }
-      if (propertyId && propPropertyName) {
-        propertyLookup.set(propertyId, propPropertyName)
-      }
-      properties.forEach((prop: any) => {
-        if (prop?.id && prop?.name) {
-          propertyLookup.set(prop.id, prop.name)
-        }
-      })
-
-      let sortedApplications = applicationsResponse.map((application: any) => {
-        const applicant = application.applicant_data || {}
-        const nameParts = [applicant.first_name, applicant.middle_initial, applicant.last_name].filter(Boolean)
-        const derivedName = nameParts.join(' ')
-
-        return {
-          ...application,
-          applicant_name: application.applicant_name || derivedName || applicant.email || 'Unknown applicant',
-          applicant_email: application.applicant_email || applicant.email || '',
-          applicant_phone: application.applicant_phone || applicant.phone || '',
-          property_name: application.property_name || propertyLookup.get(application.property_id) || application.property_id
-        }
-      })
-
+      let sortedApplications = [...payload]
+      
       // Apply sorting
       sortedApplications.sort((a, b) => {
         let aValue = a[sortBy as keyof JobApplication] || ''
@@ -216,9 +277,8 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
   const fetchTalentPoolCandidates = async () => {
     try {
       setTalentPoolLoading(true)
-      const endpoint = '/api/hr/applications/talent-pool'
-      const response = await axios.get(endpoint, {
-        headers: { Authorization: `Bearer ${token}` },
+      const endpoint = '/hr/applications/talent-pool'
+      const response = await apiClient.get(endpoint, {
         params: {
           property_id: userRole === 'hr' && talentPoolPropertyFilter !== 'all' ? talentPoolPropertyFilter : undefined,
           department: talentPoolDepartmentFilter !== 'all' ? talentPoolDepartmentFilter : undefined,
@@ -226,10 +286,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
         }
       })
       
-      const tpPayload = response.data
-      let candidates = Array.isArray(tpPayload)
-        ? tpPayload
-        : tpPayload?.applications || tpPayload?.data?.applications || []
+      let candidates = response.data.applications || []
       
       // Apply search filter
       if (talentPoolSearchQuery) {
@@ -254,9 +311,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
 
   const fetchProperties = async () => {
     try {
-      const response = await axios.get('/api/hr/properties', {
-        headers: { Authorization: `Bearer ${token}` }
-      })
+      const response = await apiClient.get('/hr/properties')
       // Handle wrapped response format
       const propertiesData = response.data.data || response.data
       setProperties(Array.isArray(propertiesData) ? propertiesData : [])
@@ -272,21 +327,8 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
     }
   }, [searchQuery, statusFilter, departmentFilter, propertyFilter, sortBy, sortOrder])
 
-  useEffect(() => {
-    if (userRole === 'manager' && property) {
-      setProperties([property])
-    }
-  }, [userRole, property])
-
-  // Auto-refresh applications every 30 seconds to prevent stale data
-  // TEMPORARILY DISABLED - causing infinite refresh loop
-  // useEffect(() => {
-  //   const interval = setInterval(() => {
-  //     fetchApplications()
-  //   }, 30000) // 30 seconds
-
-  //   return () => clearInterval(interval)
-  // }, [])
+  // Removed auto-refresh interval - WebSocket provides real-time updates
+  // Manual refresh button is available for user control
 
   useEffect(() => {
     if (activeTab === 'talent-pool') {
@@ -374,10 +416,13 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
         formData.append(key, value)
       })
 
-      console.log('🚀 Making approval request to:', `/api/applications/${selectedApplication.id}/approve`)
+      console.log('🚀 Making approval request to:', `/applications/${selectedApplication.id}/approve`)
       
-      const response = await axios.post(`/api/applications/${selectedApplication.id}/approve`, formData, {
-        headers: { Authorization: `Bearer ${token}` }
+      const response = await apiClient.post(`/applications/${selectedApplication.id}/approve`, formData, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
       })
 
       console.log('✅ Approval successful:', response.data)
@@ -460,7 +505,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
       const formData = new FormData()
       formData.append('rejection_reason', rejectionReason.trim())
 
-      const response = await axios.post(`/api/applications/${selectedApplication.id}/reject`, formData, {
+      const response = await axios.post(`${getApiUrl()}/applications/${selectedApplication.id}/reject`, formData, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'Content-Type': 'multipart/form-data'
@@ -523,7 +568,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
       
       if (bulkActionType === 'email') {
         // Send bulk email notifications to talent pool candidates
-        const response = await axios.post('/api/hr/applications/bulk-talent-pool-notify', {
+        const response = await axios.post(`${getApiUrl()}/hr/applications/bulk-talent-pool-notify`, {
           application_ids: selectedTalentPoolIds
         }, {
           headers: { Authorization: `Bearer ${token}` }
@@ -532,7 +577,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
         alert(`Email notifications sent to ${selectedTalentPoolIds.length} candidates`)
       } else if (bulkActionType === 'reactivate') {
         // Reactivate talent pool candidates (move back to pending)
-        const response = await axios.post('/api/hr/applications/bulk-reactivate', {
+        const response = await axios.post(`${getApiUrl()}/hr/applications/bulk-reactivate`, {
           application_ids: selectedTalentPoolIds
         }, {
           headers: { Authorization: `Bearer ${token}` }
@@ -578,7 +623,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
       formData.append('new_status', newStatus)
       formData.append('reason', reason)
 
-      await axios.post('/api/hr/applications/bulk-status-update', formData, {
+      await axios.post(`${getApiUrl()}/hr/applications/bulk-status-update`, formData, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -602,7 +647,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
   const fetchApplicationHistory = async (applicationId: string) => {
     try {
       setHistoryLoading(true)
-      const response = await axios.get(`/api/hr/applications/${applicationId}/history`, {
+      const response = await axios.get(`${getApiUrl()}/hr/applications/${applicationId}/history`, {
         headers: { Authorization: `Bearer ${token}` }
       })
       setApplicationHistory(response.data.history || [])
@@ -647,7 +692,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
       if (bulkStatusData.reason) formData.append('reason', bulkStatusData.reason)
       if (bulkStatusData.notes) formData.append('notes', bulkStatusData.notes)
 
-      await axios.post('/api/hr/applications/bulk-status-update', formData, {
+      await axios.post(`${getApiUrl()}/hr/applications/bulk-status-update`, formData, {
         headers: { Authorization: `Bearer ${token}` }
       })
 
@@ -732,6 +777,28 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
       {
         key: 'department',
         label: 'Department'
+      },
+      {
+        key: 'contact',
+        label: 'Contact',
+        render: (_, application) => (
+          <div className="text-sm">
+            <div className="text-gray-900">{application.applicant_phone || application.applicant_data?.phone || '—'}</div>
+            <div className="text-gray-500">{application.applicant_email}</div>
+          </div>
+        )
+      },
+      {
+        key: 'location',
+        label: 'Location',
+        render: (_, application) => (
+          <span className="text-sm text-gray-600">
+            {[
+              application.applicant_data?.city,
+              application.applicant_data?.state
+            ].filter(Boolean).join(', ') || '—'}
+          </span>
+        )
       }
     ]
 
@@ -953,7 +1020,7 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
     return (
       <Card>
         <CardHeader>
-          <CardTitle>Applications Management</CardTitle>
+          <CardTitle>Application Management Screen</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex items-center justify-center py-8">
@@ -965,9 +1032,13 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
   }
 
   return (
-    <Card>
+    <Card className="transition-opacity duration-300 opacity-100">
       <CardHeader>
-        <CardTitle>Applications Management</CardTitle>
+        <div className="flex justify-between items-center">
+          <div className="flex items-center gap-3">
+            <CardTitle>Applications Management</CardTitle>
+          </div>
+        </div>
       </CardHeader>
       <CardContent>
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -1128,6 +1199,20 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
               <span className="text-blue-600 text-xs">Filters active</span>
             )}
           </div>
+          {/* Manager quick QR access */}
+          {userRole === 'manager' && currentProperty?.id && (
+            <div className="mt-2">
+              <QRCodeDisplay 
+                property={{
+                  id: currentProperty.id,
+                  name: currentProperty.name,
+                  qr_code_url: currentProperty.qr_code_url || ''
+                }}
+                showRegenerateButton={true}
+                className="whitespace-nowrap"
+              />
+            </div>
+          )}
         </div>
 
         {/* Advanced Filters Section */}
@@ -1379,385 +1464,609 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
           </TabsContent>
         </Tabs>
 
-        {/* Application Detail Modal */}
+        {/* Application Detail Modal - Enhanced with all fields */}
         <Dialog open={isDetailModalOpen} onOpenChange={setIsDetailModalOpen}>
-          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Application Details</DialogTitle>
-              {selectedApplication && (
-                <DialogDescription className="text-sm text-slate-500">
-                  Comprehensive submission data for {selectedApplication.applicant_name}
-                </DialogDescription>
-              )}
+              <DialogTitle>
+                Complete Application Details
+                {selectedApplication?.applicant_data?.application_language && (
+                  <Badge className="ml-2" variant="secondary">
+                    {selectedApplication.applicant_data.application_language === 'es' ? 'Spanish Application' : 'English Application'}
+                  </Badge>
+                )}
+              </DialogTitle>
             </DialogHeader>
-            
-            {selectedApplication && (() => {
-              const applicant = selectedApplication.applicant_data || {}
-              const employmentHistory = Array.isArray(applicant.employment_history) ? applicant.employment_history : []
-              const educationHistory = Array.isArray(applicant.education_history) ? applicant.education_history : []
-              const skills = Array.isArray(applicant.skills_languages_certifications) ? applicant.skills_languages_certifications : []
-              const voluntary = typeof applicant.voluntary_self_identification === 'object' && applicant.voluntary_self_identification !== null
-                ? applicant.voluntary_self_identification
-                : null
-              const conviction = applicant.conviction_record || {}
 
-              const parseBooleanish = (val: any): boolean | undefined => {
-                if (typeof val === 'boolean') return val
-                if (typeof val === 'number') {
-                  if (val === 1) return true
-                  if (val === 0) return false
-                }
-                if (typeof val === 'string') {
-                  const normalized = val.trim().toLowerCase()
-                  if (['yes', 'true', 'y', '1'].includes(normalized)) return true
-                  if (['no', 'false', 'n', '0'].includes(normalized)) return false
-                }
-                return undefined
-              }
-
-              const yesNo = (val: any) => {
-                const parsed = parseBooleanish(val)
-                if (parsed !== undefined) return parsed ? 'Yes' : 'No'
-                if (val === undefined || val === null || val === '') return 'Not provided'
-                return String(val)
-              }
-
-              const formatEmploymentType = (val: any) => {
-                if (!val) return 'Not specified'
-                const types: Record<string, string> = {
-                  'full_time': 'Full Time',
-                  'part_time': 'Part Time',
-                  'temporary': 'Temporary',
-                  'seasonal': 'Seasonal',
-                  'contract': 'Contract'
-                }
-                return types[val] || val
-              }
-
-              const formatShiftPreference = (val: any) => {
-                if (!val) return 'Not specified'
-                const shifts: Record<string, string> = {
-                  'morning': 'Morning',
-                  'afternoon': 'Afternoon',
-                  'evening': 'Evening',
-                  'night': 'Night',
-                  'flexible': 'Flexible'
-                }
-                return shifts[val] || val
-              }
-
-              const formatDisplay = (value: any): React.ReactNode => {
-                if (value === undefined || value === null || value === '') return null
-                if (React.isValidElement(value)) return value
-                if (typeof value === 'boolean') return yesNo(value)
-                if (Array.isArray(value)) {
-                  if (value.length === 0) return null
-                  return (
-                    <ul className="list-disc list-inside space-y-1 text-sm text-slate-700">
-                      {value.map((item, idx) => (
-                        <li key={idx}>
-                          {(() => {
-                            const formatted = formatDisplay(item)
-                            if (formatted === null) return 'Not provided'
-                            if (typeof formatted === 'string' || typeof formatted === 'number') return formatted
-                            return <span className="block text-slate-700">{formatted}</span>
-                          })()}
-                        </li>
-                      ))}
-                    </ul>
-                  )
-                }
-                if (typeof value === 'object') {
-                  const entries = Object.entries(value).filter(([, val]) => {
-                    if (val === undefined || val === null) return false
-                    if (typeof val === 'string') return val.trim() !== ''
-                    return true
-                  })
-                  if (entries.length === 0) return null
-                  return (
-                    <div className="space-y-2 text-sm text-slate-700">
-                      {entries.map(([key, val]) => {
-                        const formatted = formatDisplay(val)
-                        if (formatted === null) return null
-                        return (
-                          <div key={key} className="space-y-1">
-                            <span className="font-medium text-slate-500 capitalize">{key.replace(/_/g, ' ')}</span>
-                            <div className="text-slate-700">
-                              {typeof formatted === 'string' || typeof formatted === 'number' ? formatted : formatted}
-                            </div>
-                          </div>
-                        )
-                      })}
+            {selectedApplication && (
+              <div className="space-y-6">
+                {/* Application Status Overview */}
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Position</Label>
+                      <p className="font-medium">{selectedApplication.position}</p>
                     </div>
-                  )
-                }
-                return String(value)
-              }
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Department</Label>
+                      <p>{selectedApplication.department}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Property</Label>
+                      <p>{selectedApplication.property_name}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Status</Label>
+                      <div className="mt-1">{getStatusBadge(selectedApplication.status)}</div>
+                    </div>
+                  </div>
+                </div>
 
-              const renderRow = (label: string, rawValue: any, opts: { colSpan?: boolean } = {}) => {
-                try {
-                  const value = formatDisplay(rawValue)
-                  if (value === null || value === undefined || value === '') return null
-                  return (
-                    <div className={opts.colSpan ? 'col-span-2 space-y-1' : 'space-y-1'}>
-                      <Label className="text-sm font-medium text-slate-500">{label}</Label>
-                      <div className="text-sm text-slate-700 whitespace-pre-wrap">
-                        {value}
-                      </div>
+                {/* Personal Information */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 border-b pb-2">Personal Information</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Full Name</Label>
+                      <p>{selectedApplication.applicant_data.first_name} {selectedApplication.applicant_data.middle_initial ? selectedApplication.applicant_data.middle_initial + ' ' : ''}{selectedApplication.applicant_data.last_name}</p>
                     </div>
-                  )
-                } catch (error) {
-                  console.warn(`Error rendering field ${label}:`, error, rawValue)
-                  return (
-                    <div className={opts.colSpan ? 'col-span-2 space-y-1' : 'space-y-1'}>
-                      <Label className="text-sm font-medium text-slate-500">{label}</Label>
-                      <div className="text-sm text-slate-500 italic">
-                        Unable to display data
-                      </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Email</Label>
+                      <p>{selectedApplication.applicant_email || selectedApplication.applicant_data.email}</p>
                     </div>
-                  )
-                }
-              }
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Primary Phone</Label>
+                      <p>{selectedApplication.applicant_phone || selectedApplication.applicant_data.phone || 'Not provided'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Secondary Phone</Label>
+                      <p>
+                        {selectedApplication.applicant_data.secondary_phone || 'Not provided'}
+                        {selectedApplication.applicant_data.secondary_phone && selectedApplication.applicant_data.secondary_phone_type && 
+                          ` (${selectedApplication.applicant_data.secondary_phone_type})`
+                        }
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Street Address</Label>
+                      <p>
+                        {selectedApplication.applicant_data.address || 'Not provided'}
+                        {selectedApplication.applicant_data.apartment_unit && `, ${selectedApplication.applicant_data.apartment_unit}`}
+                      </p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">City, State ZIP</Label>
+                      <p>{selectedApplication.applicant_data.city}, {selectedApplication.applicant_data.state} {selectedApplication.applicant_data.zip_code}</p>
+                    </div>
+                    {/* SSN and Date of Birth removed - collected during onboarding phase for privacy compliance */}
+                  </div>
+                </div>
 
-              return (
-                <div className="space-y-8">
-                  <section className="grid gap-6 rounded-xl border border-slate-200/70 bg-white p-6 shadow-sm">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {renderRow('Position', selectedApplication.position)}
-                      {renderRow('Department', selectedApplication.department)}
-                      {renderRow('Property', selectedApplication.property_name || selectedApplication.property_id || 'Unknown Property')}
-                      <div className="space-y-1">
-                        <Label className="text-sm font-medium text-slate-500">Status</Label>
-                        <div className="mt-1">{getStatusBadge(selectedApplication.status)}</div>
-                      </div>
-                      {renderRow('Applied', formatDate(selectedApplication.applied_at))}
-                      {renderRow('Desired Start Date', applicant.start_date)}
+                {/* Position & Compensation */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 border-b pb-2">Position & Compensation</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Position Applied For</Label>
+                      <p>{selectedApplication.position}</p>
                     </div>
-                  </section>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Department</Label>
+                      <p>{selectedApplication.department}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Desired Salary</Label>
+                      <p>{selectedApplication.applicant_data.salary_desired || 'Not specified'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Employment Type</Label>
+                      <p>{translateStoredValue(selectedApplication.applicant_data.employment_type, 'employment_type')}</p>
+                    </div>
+                  </div>
+                </div>
 
-                  <section className="space-y-4">
-                    <h3 className="text-base font-semibold text-slate-800">Applicant Information</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-xl border border-slate-200/70 bg-white p-6 shadow-sm">
-                      {renderRow('Full Name', selectedApplication.applicant_name)}
-                      {renderRow('Email', selectedApplication.applicant_email)}
-                      {renderRow('Primary Phone', selectedApplication.applicant_phone)}
-                      {renderRow('Secondary Phone', applicant.secondary_phone)}
-                      {renderRow('Address', [applicant.address, applicant.apartment_unit].filter(Boolean).join(' '))}
-                      {renderRow('City / State / ZIP', `${applicant.city || ''}${applicant.city ? ',' : ''} ${applicant.state || ''} ${applicant.zip_code || ''}`.trim())}
-                      {renderRow('Primary Phone Type', applicant.phone_is_cell ? 'Cell' : applicant.phone_is_home ? 'Home' : undefined)}
-                      {renderRow('Secondary Phone Type', applicant.secondary_phone_is_cell ? 'Cell' : applicant.secondary_phone_is_home ? 'Home' : undefined)}
-                      {renderRow('Work Authorization', yesNo(applicant.work_authorized))}
-                      {renderRow('Sponsorship Required', yesNo(applicant.sponsorship_required))}
-                      {renderRow('Age Verification', yesNo(applicant.age_verification))}
+                {/* Legal & Compliance */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 border-b pb-2">Legal & Compliance</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">18 Years or Older</Label>
+                      <p>{translateStoredValue(selectedApplication.applicant_data.age_verification, 'boolean')}</p>
                     </div>
-                  </section>
-
-                  <section className="space-y-4">
-                    <h3 className="text-base font-semibold text-slate-800">Job Preferences & Experience</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-xl border border-slate-200/70 bg-white p-6 shadow-sm">
-                      {renderRow('Years of Experience', applicant.experience_years)}
-                      {renderRow('Hotel Experience', yesNo(applicant.hotel_experience))}
-                      {renderRow('Previous Hotel Employment', yesNo(applicant.previous_hotel_employment))}
-                      {renderRow('Previous Hotel Details', applicant.previous_hotel_details)}
-                      {renderRow('Desired Salary', applicant.salary_desired)}
-                      {renderRow('Employment Type', formatEmploymentType(applicant.employment_type))}
-                      {renderRow('Shift Preference', formatShiftPreference(applicant.shift_preference))}
-                      {renderRow('Seasonal Start', applicant.seasonal_start_date)}
-                      {renderRow('Seasonal End', applicant.seasonal_end_date)}
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Work Authorization</Label>
+                      <p>{translateStoredValue(selectedApplication.applicant_data.work_authorized, 'yesno')}</p>
                     </div>
-                    {skills.length > 0 && (
-                      <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-4 space-y-2">
-                        <Label className="text-sm font-medium text-slate-500">Skills, Languages & Certifications</Label>
-                        <ul className="list-disc list-inside text-sm text-slate-700 space-y-1">
-                          {skills.map((skill: any, index: number) => (
-                            <li key={index}>{skill}</li>
-                          ))}
-                        </ul>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Requires Sponsorship</Label>
+                      <p>{translateStoredValue(selectedApplication.applicant_data.sponsorship_required, 'yesno')}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Criminal Record</Label>
+                      <p>
+                        {selectedApplication.applicant_data.conviction_record?.has_conviction === true
+                          ? 'Yes - See explanation'
+                          : translateStoredValue(selectedApplication.applicant_data.conviction_record?.has_conviction, 'boolean')}
+                      </p>
+                    </div>
+                    {selectedApplication.applicant_data.conviction_record?.has_conviction === true && 
+                     selectedApplication.applicant_data.conviction_record?.explanation && (
+                      <div className="col-span-2">
+                        <Label className="text-sm font-medium text-gray-500">Criminal Record Explanation</Label>
+                        <p className="text-sm bg-yellow-50 p-2 rounded">
+                          {selectedApplication.applicant_data.conviction_record.explanation}
+                        </p>
                       </div>
                     )}
-                  </section>
+                  </div>
+                </div>
 
-                  {employmentHistory.length > 0 && (
-                    <section className="space-y-4">
-                      <h3 className="text-base font-semibold text-slate-800">Employment History</h3>
-                      <div className="space-y-4">
-                        {employmentHistory.map((job: any, index: number) => (
-                          <div key={index} className="rounded-xl border border-slate-200/70 bg-slate-50 p-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {renderRow('Company', job.employer_name || job.company_name || 'Not provided')}
-                              {renderRow('Title', job.ending_job_title || job.job_title || job.starting_job_title)}
-                              {renderRow('Duration', `${job.from_date || job.start_date || 'N/A'} – ${job.to_date || job.end_date || 'Present'}`)}
-                              {renderRow('Supervisor', job.supervisor || job.supervisor_name)}
-                              {renderRow('Reason for Leaving', job.reason_for_leaving, { colSpan: true })}
-                              {renderRow('Responsibilities', job.responsibilities, { colSpan: true })}
-                            </div>
+                {/* Availability & Schedule */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 border-b pb-2">Availability & Schedule</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Available Start Date</Label>
+                      <p>{selectedApplication.applicant_data.start_date || 'Immediately'}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Shift Preference</Label>
+                      <p>{translateStoredValue(selectedApplication.applicant_data.shift_preference, 'shift')}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Employment Type</Label>
+                      <p>{translateStoredValue(selectedApplication.applicant_data.employment_type, 'employment_type')}</p>
+                    </div>
+                    {selectedApplication.applicant_data.employment_type === 'Seasonal' && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Seasonal Dates</Label>
+                        <p>
+                          {selectedApplication.applicant_data.seasonal_start_date && selectedApplication.applicant_data.seasonal_end_date
+                            ? `${selectedApplication.applicant_data.seasonal_start_date} to ${selectedApplication.applicant_data.seasonal_end_date}`
+                            : 'Not specified'
+                          }
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Previous Hotel Experience */}
+                {(selectedApplication.applicant_data.previous_hotel_employment || selectedApplication.applicant_data.hotel_experience || selectedApplication.applicant_data.worked_before_hotel) && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 border-b pb-2">Previous Hotel Experience</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {(selectedApplication.applicant_data.previous_hotel_employment !== undefined || selectedApplication.applicant_data.hotel_experience !== undefined) && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Has Hotel Experience</Label>
+                          <p>{translateStoredValue(
+                            selectedApplication.applicant_data.previous_hotel_employment !== undefined
+                              ? selectedApplication.applicant_data.previous_hotel_employment
+                              : selectedApplication.applicant_data.hotel_experience,
+                            'yesno'
+                          )}</p>
+                        </div>
+                      )}
+                      {selectedApplication.applicant_data.previous_hotel_details && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Previous Hotel Details</Label>
+                          <p>{selectedApplication.applicant_data.previous_hotel_details}</p>
+                        </div>
+                      )}
+                      {selectedApplication.applicant_data.worked_before_hotel && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Worked at This Hotel Before</Label>
+                          <p>{translateStoredValue(selectedApplication.applicant_data.worked_before_hotel, 'yesno')}</p>
+                        </div>
+                      )}
+                      {(selectedApplication.applicant_data.worked_before_hotel === 'Yes' || selectedApplication.applicant_data.worked_before_hotel === 'yes' || selectedApplication.applicant_data.worked_before_hotel === 'sí') && (
+                        <>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Previous Work Period</Label>
+                            <p>
+                              {selectedApplication.applicant_data.worked_before_from && selectedApplication.applicant_data.worked_before_to
+                                ? `${selectedApplication.applicant_data.worked_before_from} to ${selectedApplication.applicant_data.worked_before_to}`
+                                : 'Not specified'
+                              }
+                            </p>
                           </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
-
-                  {educationHistory.length > 0 && (
-                    <section className="space-y-4">
-                      <h3 className="text-base font-semibold text-slate-800">Education History</h3>
-                      <div className="space-y-4">
-                        {educationHistory.map((edu: any, index: number) => (
-                          <div key={index} className="rounded-xl border border-slate-200/70 bg-slate-50 p-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {renderRow('School', edu.school_name)}
-                              {renderRow('Location', edu.location)}
-                              {renderRow('Years Attended', edu.years_attended)}
-                              {renderRow('Graduated', yesNo(edu.graduated))}
-                              {renderRow('Degree / Certificate', edu.degree_received, { colSpan: true })}
-                            </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Previous Position</Label>
+                            <p>{selectedApplication.applicant_data.worked_before_position || 'Not specified'}</p>
                           </div>
-                        ))}
-                      </div>
-                    </section>
-                  )}
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Previous Supervisor</Label>
+                            <p>{selectedApplication.applicant_data.worked_before_supervisor || 'Not specified'}</p>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                  {applicant.personal_reference && (
-                    <section className="space-y-4">
-                      <h3 className="text-base font-semibold text-slate-800">Personal Reference</h3>
-                      <div className="rounded-xl border border-slate-200/70 bg-slate-50 p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {renderRow('Name', applicant.personal_reference.name)}
-                        {renderRow('Relationship', applicant.personal_reference.relationship)}
-                        {renderRow('Phone', applicant.personal_reference.phone)}
-                        {renderRow('Years Known', applicant.personal_reference.years_known)}
-                      </div>
-                    </section>
-                  )}
-
-                  {(applicant.how_heard || applicant.how_heard_detailed || applicant.additional_comments) && (
-                    <section className="space-y-4">
-                      <h3 className="text-base font-semibold text-slate-800">Additional Information</h3>
-                      <div className="rounded-xl border border-slate-200/70 bg-white p-6 shadow-sm space-y-3">
-                        {renderRow('How did they hear about us?', applicant.how_heard)}
-                        {renderRow('Details', applicant.how_heard_detailed)}
-                        {renderRow('Additional Comments', applicant.additional_comments)}
-                      </div>
-                    </section>
-                  )}
-
-                  {(applicant.military_service || voluntary || conviction) && (
-                    <section className="space-y-4">
-                      <h3 className="text-base font-semibold text-slate-800">Compliance & Declarations</h3>
-                      <div className="grid gap-4 rounded-xl border border-slate-200/70 bg-white p-6 shadow-sm">
-                        {renderRow('Military Service', applicant.military_service)}
-                        {voluntary && (
-                          <div className="space-y-2">
-                            <Label className="text-sm font-medium text-slate-500">Voluntary Self Identification</Label>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-slate-700">
-                              {Object.entries(voluntary).map(([key, value]) => (
-                                value ? (
-                                  <div key={key}>
-                                    <span className="font-medium capitalize">{key.replace(/_/g, ' ')}:</span> {String(value)}
-                                  </div>
-                                ) : null
-                              ))}
+                {/* Education History */}
+                {selectedApplication.applicant_data.education_history && selectedApplication.applicant_data.education_history.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 border-b pb-2">Education History</h3>
+                    <div className="space-y-3">
+                      {selectedApplication.applicant_data.education_history.map((edu: any, index: number) => (
+                        <div key={index} className="bg-gray-50 p-3 rounded">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">School Name</Label>
+                              <p className="text-sm">{edu.school_name || 'Not provided'}</p>
                             </div>
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Location</Label>
+                              <p className="text-sm">{edu.location || 'Not provided'}</p>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Years Attended</Label>
+                              <p className="text-sm">{edu.years_attended || 'Not provided'}</p>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Degree/Diploma</Label>
+                              <p className="text-sm">{edu.degree_received || 'Not provided'}</p>
+                            </div>
+                            {edu.graduated !== undefined && (
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Graduated</Label>
+                                <p className="text-sm">{edu.graduated ? 'Yes' : 'No'}</p>
+                              </div>
+                            )}
+                            {edu.major && (
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Major/Course of Study</Label>
+                                <p className="text-sm">{edu.major}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Employment History */}
+                {selectedApplication.applicant_data.employment_history && selectedApplication.applicant_data.employment_history.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 border-b pb-2">Employment History</h3>
+                    <div className="space-y-3">
+                      {selectedApplication.applicant_data.employment_history.map((job: any, index: number) => (
+                        <div key={index} className="bg-gray-50 p-3 rounded">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Company</Label>
+                              <p className="text-sm font-medium">{job.company_name || job.company || 'Not provided'}</p>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Position</Label>
+                              <p className="text-sm">{job.job_title || job.position || 'Not provided'}</p>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Employment Period</Label>
+                              <p className="text-sm">
+                                {job.from_date && job.to_date 
+                                  ? `${job.from_date} to ${job.to_date}` 
+                                  : job.from_date 
+                                    ? `${job.from_date} to Present` 
+                                    : 'Not provided'
+                                }
+                              </p>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Supervisor</Label>
+                              <p className="text-sm">{job.supervisor || 'Not provided'}</p>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Phone</Label>
+                              <p className="text-sm">{job.phone || 'Not provided'}</p>
+                            </div>
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">May Contact</Label>
+                              <p className="text-sm">{job.may_contact ? 'Yes' : job.may_contact === false ? 'No' : 'Not specified'}</p>
+                            </div>
+                            {(job.starting_salary || job.ending_salary) && (
+                              <div>
+                                <Label className="text-sm font-medium text-gray-500">Salary</Label>
+                                <p className="text-sm">
+                                  {job.starting_salary && job.ending_salary
+                                    ? `$${job.starting_salary} - $${job.ending_salary}`
+                                    : job.starting_salary
+                                      ? `Starting: $${job.starting_salary}`
+                                      : `Ending: $${job.ending_salary}`
+                                  }
+                                </p>
+                              </div>
+                            )}
+                            {job.address && (
+                              <div className="col-span-2">
+                                <Label className="text-sm font-medium text-gray-500">Company Address</Label>
+                                <p className="text-sm">{job.address}</p>
+                              </div>
+                            )}
+                            <div className="col-span-2">
+                              <Label className="text-sm font-medium text-gray-500">Reason for Leaving</Label>
+                              <p className="text-sm">{job.reason_for_leaving || job.reason_left || 'Not provided'}</p>
+                            </div>
+                            {job.responsibilities && (
+                              <div className="col-span-2">
+                                <Label className="text-sm font-medium text-gray-500">Responsibilities</Label>
+                                <p className="text-sm">{job.responsibilities}</p>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* References */}
+                {(selectedApplication.applicant_data.personal_reference || selectedApplication.applicant_data.personal_reference_name) && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 border-b pb-2">References</h3>
+                    <div className="bg-gray-50 p-3 rounded">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Reference Name</Label>
+                          <p className="text-sm">
+                            {typeof selectedApplication.applicant_data.personal_reference === 'object'
+                              ? (selectedApplication.applicant_data.personal_reference.name || 'Not specified')
+                              : (selectedApplication.applicant_data.personal_reference_name || 'Not specified')
+                            }
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Relationship</Label>
+                          <p className="text-sm">
+                            {typeof selectedApplication.applicant_data.personal_reference === 'object'
+                              ? (selectedApplication.applicant_data.personal_reference.relationship || 'Not specified')
+                              : (selectedApplication.applicant_data.personal_reference_relationship || 'Not specified')
+                            }
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Phone</Label>
+                          <p className="text-sm">
+                            {typeof selectedApplication.applicant_data.personal_reference === 'object'
+                              ? (selectedApplication.applicant_data.personal_reference.phone || 'Not provided')
+                              : (selectedApplication.applicant_data.personal_reference_phone || 'Not provided')
+                            }
+                          </p>
+                        </div>
+                        {typeof selectedApplication.applicant_data.personal_reference === 'object' &&
+                         selectedApplication.applicant_data.personal_reference.years_known && (
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Years Known</Label>
+                            <p className="text-sm">{selectedApplication.applicant_data.personal_reference.years_known} years</p>
                           </div>
                         )}
-                        {renderRow('Veteran Status', applicant.veteran_status)}
-                        {(() => {
-                          if (!conviction) return null
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Email</Label>
+                          <p className="text-sm">
+                            {typeof selectedApplication.applicant_data.personal_reference === 'object'
+                              ? (selectedApplication.applicant_data.personal_reference.email || 'Not provided')
+                              : (selectedApplication.applicant_data.personal_reference_email || 'Not provided')
+                            }
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
-                          try {
-                            const convictionSource = conviction
-                            const convictionData = typeof convictionSource === 'object' && convictionSource !== null
-                              ? { ...convictionSource as Record<string, any> }
-                              : {}
-
-                          const hasRecordRaw = convictionData.has_conviction ?? convictionData.has_record ?? convictionData.hasRecord ?? convictionSource
-                          const hasRecordBool = parseBooleanish(hasRecordRaw)
-                          const hasRecordDisplay = hasRecordBool !== undefined
-                            ? yesNo(hasRecordBool)
-                            : hasRecordRaw !== undefined && hasRecordRaw !== null && hasRecordRaw !== ''
-                              ? String(hasRecordRaw)
-                              : null
-
-                          delete convictionData.has_conviction
-                          delete convictionData.has_record
-                          delete convictionData.hasRecord
-
-                          const convictionExtrasNode = formatDisplay(convictionData)
-                          const convictionString = typeof convictionSource === 'string' ? convictionSource : null
-
-                          const rows: React.ReactNode[] = []
-
-                          if (hasRecordDisplay) {
-                            rows.push(
-                              <div key="has-record" className="font-semibold">
-                                {hasRecordDisplay}
-                              </div>
-                            )
+                {/* Military Service */}
+                {selectedApplication.applicant_data.military_service && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 border-b pb-2">Military Service</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Service Status</Label>
+                        <p>
+                          {typeof selectedApplication.applicant_data.military_service === 'object' 
+                            ? (selectedApplication.applicant_data.military_service.served ? 'Yes' : 'No')
+                            : (selectedApplication.applicant_data.military_service || 'Not specified')
                           }
-
-                          if (convictionString && (!hasRecordDisplay || convictionString !== hasRecordDisplay)) {
-                            rows.push(
-                              <div key="string-value" className="text-slate-700">
-                                {convictionString}
-                              </div>
-                            )
-                          }
-
-                          if (convictionExtrasNode && !(typeof convictionExtrasNode === 'string' && convictionExtrasNode.trim() === '')) {
-                            rows.push(
-                              <div key="extra-details" className="space-y-1">
-                                {convictionExtrasNode}
-                              </div>
-                            )
-                          }
-
-                          if (rows.length === 0) {
-                            return null
-                          }
-
-                          if (rows.length === 1 && hasRecordBool === false) {
-                            rows.push(
-                              <div key="no-record" className="text-slate-600">
-                                No convictions declared.
-                              </div>
-                            )
-                          }
-
-                          return (
-                            <div className="space-y-2">
-                              <Label className="text-sm font-medium text-slate-500">Conviction Record</Label>
-                              <div className="rounded-lg bg-slate-50 p-4 space-y-2 text-sm text-slate-700">
-                                {rows}
-                              </div>
+                        </p>
+                      </div>
+                      {(typeof selectedApplication.applicant_data.military_service === 'object' 
+                        ? selectedApplication.applicant_data.military_service.served === true
+                        : selectedApplication.applicant_data.military_service !== 'Never Served') && (
+                        <>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Branch</Label>
+                            <p>
+                              {typeof selectedApplication.applicant_data.military_service === 'object'
+                                ? (selectedApplication.applicant_data.military_service.branch || 'Not specified')
+                                : (selectedApplication.applicant_data.military_branch || 'Not specified')
+                              }
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Service Dates</Label>
+                            <p>
+                              {typeof selectedApplication.applicant_data.military_service === 'object'
+                                ? (selectedApplication.applicant_data.military_service.from_date && selectedApplication.applicant_data.military_service.to_date
+                                  ? `${selectedApplication.applicant_data.military_service.from_date} to ${selectedApplication.applicant_data.military_service.to_date}`
+                                  : 'Not specified')
+                                : (selectedApplication.applicant_data.military_from && selectedApplication.applicant_data.military_to
+                                  ? `${selectedApplication.applicant_data.military_from} to ${selectedApplication.applicant_data.military_to}`
+                                  : 'Not specified')
+                              }
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-sm font-medium text-gray-500">Discharge Type</Label>
+                            <p>
+                              {typeof selectedApplication.applicant_data.military_service === 'object'
+                                ? (selectedApplication.applicant_data.military_service.type_of_discharge || 'Not specified')
+                                : (selectedApplication.applicant_data.military_discharge_type || 'Not specified')
+                              }
+                            </p>
+                          </div>
+                          {typeof selectedApplication.applicant_data.military_service === 'object' && 
+                           selectedApplication.applicant_data.military_service.rank_at_discharge && (
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Rank at Discharge</Label>
+                              <p>{selectedApplication.applicant_data.military_service.rank_at_discharge}</p>
                             </div>
-                          )
-                          } catch (error) {
-                            console.warn('Error processing conviction record:', error, conviction)
-                            return (
-                              <div className="space-y-2">
-                                <Label className="text-sm font-medium text-slate-500">Conviction Record</Label>
-                                <div className="rounded-lg bg-slate-50 p-4 space-y-2 text-sm text-slate-500 italic">
-                                  Unable to display conviction record data
-                                </div>
-                              </div>
-                            )
-                          }
-                        })()}
-                      </div>
-                    </section>
-                  )}
+                          )}
+                          {typeof selectedApplication.applicant_data.military_service === 'object' && 
+                           selectedApplication.applicant_data.military_service.disabilities_related && (
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Service-Related Disabilities</Label>
+                              <p>{selectedApplication.applicant_data.military_service.disabilities_related}</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
 
-                  {selectedApplication.reviewed_by && (
-                    <section className="space-y-4">
-                      <h3 className="text-base font-semibold text-slate-800">Review Information</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-xl border border-slate-200/70 bg-white p-6 shadow-sm">
-                        {renderRow('Reviewed By', selectedApplication.reviewed_by)}
-                        {renderRow('Reviewed At', selectedApplication.reviewed_at ? formatDate(selectedApplication.reviewed_at) : 'N/A')}
-                        {renderRow('Rejection Reason', selectedApplication.rejection_reason, { colSpan: true })}
+                {/* Experience & Skills */}
+                {(selectedApplication.applicant_data.experience_years || selectedApplication.applicant_data.skills || selectedApplication.applicant_data.languages || selectedApplication.applicant_data.certifications || selectedApplication.applicant_data.skills_languages_certifications) && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 border-b pb-2">Experience & Qualifications</h3>
+                    <div className="space-y-3">
+                      {selectedApplication.applicant_data.experience_years && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Years of Experience</Label>
+                          <p className="text-sm">{selectedApplication.applicant_data.experience_years} years</p>
+                        </div>
+                      )}
+                      {selectedApplication.applicant_data.skills_languages_certifications && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Skills, Languages & Certifications</Label>
+                          <p className="text-sm">{selectedApplication.applicant_data.skills_languages_certifications}</p>
+                        </div>
+                      )}
+                      {!selectedApplication.applicant_data.skills_languages_certifications && (
+                        <>
+                          {selectedApplication.applicant_data.skills && (
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Skills</Label>
+                              <p className="text-sm">{selectedApplication.applicant_data.skills}</p>
+                            </div>
+                          )}
+                          {selectedApplication.applicant_data.languages && (
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Languages</Label>
+                              <p className="text-sm">{selectedApplication.applicant_data.languages}</p>
+                            </div>
+                          )}
+                          {selectedApplication.applicant_data.certifications && (
+                            <div>
+                              <Label className="text-sm font-medium text-gray-500">Certifications</Label>
+                              <p className="text-sm">{selectedApplication.applicant_data.certifications}</p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Equal Opportunity Information */}
+                {(selectedApplication.applicant_data.voluntary_self_identification || selectedApplication.applicant_data.gender || selectedApplication.applicant_data.race_ethnicity || selectedApplication.applicant_data.veteran_status || selectedApplication.applicant_data.disability_status) && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-3 border-b pb-2">Equal Opportunity Information (Voluntary)</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      {(selectedApplication.applicant_data.voluntary_self_identification?.gender || selectedApplication.applicant_data.gender) && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Gender</Label>
+                          <p>{translateStoredValue(
+                            selectedApplication.applicant_data.voluntary_self_identification?.gender || selectedApplication.applicant_data.gender,
+                            'gender'
+                          )}</p>
+                        </div>
+                      )}
+                      {(selectedApplication.applicant_data.voluntary_self_identification?.ethnicity || selectedApplication.applicant_data.race_ethnicity) && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Race/Ethnicity</Label>
+                          <p>{selectedApplication.applicant_data.voluntary_self_identification?.ethnicity || selectedApplication.applicant_data.race_ethnicity}</p>
+                        </div>
+                      )}
+                      {(selectedApplication.applicant_data.voluntary_self_identification?.veteran_status || selectedApplication.applicant_data.veteran_status) && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Veteran Status</Label>
+                          <p>{translateStoredValue(
+                            selectedApplication.applicant_data.voluntary_self_identification?.veteran_status || selectedApplication.applicant_data.veteran_status,
+                            'veteran_status'
+                          )}</p>
+                        </div>
+                      )}
+                      {(selectedApplication.applicant_data.voluntary_self_identification?.disability_status || selectedApplication.applicant_data.disability_status) && (
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Disability Status</Label>
+                          <p>{translateStoredValue(
+                            selectedApplication.applicant_data.voluntary_self_identification?.disability_status || selectedApplication.applicant_data.disability_status,
+                            'disability_status'
+                          )}</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Additional Information */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 border-b pb-2">Additional Information</h3>
+                  <div className="space-y-3">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">How did you hear about this position?</Label>
+                      <p>{selectedApplication.applicant_data.how_heard || 'Not specified'}</p>
+                    </div>
+                    {selectedApplication.applicant_data.how_heard_detailed && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">How They Heard - Details</Label>
+                        <p className="text-sm">{selectedApplication.applicant_data.how_heard_detailed}</p>
                       </div>
-                    </section>
-                  )}
+                    )}
+                    {selectedApplication.applicant_data.additional_comments && (
+                      <div>
+                        <Label className="text-sm font-medium text-gray-500">Additional Comments</Label>
+                        <p className="text-sm bg-gray-50 p-2 rounded">{selectedApplication.applicant_data.additional_comments}</p>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              )
-            })()}
+
+                {/* Application Metadata */}
+                <div>
+                  <h3 className="text-lg font-semibold mb-3 border-b pb-2">Application Details</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Applied On</Label>
+                      <p>{formatDate(selectedApplication.applied_at)}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Application ID</Label>
+                      <p className="text-xs font-mono">{selectedApplication.id}</p>
+                    </div>
+                    {selectedApplication.reviewed_by && (
+                      <>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Reviewed By</Label>
+                          <p>{selectedApplication.reviewed_by}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm font-medium text-gray-500">Reviewed At</Label>
+                          <p>{selectedApplication.reviewed_at ? formatDate(selectedApplication.reviewed_at) : 'N/A'}</p>
+                        </div>
+                      </>
+                    )}
+                    {selectedApplication.rejection_reason && (
+                      <div className="col-span-2">
+                        <Label className="text-sm font-medium text-gray-500">Rejection Reason</Label>
+                        <p className="text-red-600 bg-red-50 p-2 rounded">{selectedApplication.rejection_reason}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
 
@@ -1766,9 +2075,6 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Reject Application</DialogTitle>
-              <DialogDescription className="text-sm text-slate-500">
-                Share a short note explaining the decision.
-              </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4">
@@ -1811,11 +2117,6 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>Approve Application - Job Offer Details</DialogTitle>
-              {selectedApplication && (
-                <DialogDescription className="text-sm text-slate-500">
-                  Configure the offer email for {selectedApplication.applicant_name}.
-                </DialogDescription>
-              )}
             </DialogHeader>
             
             {selectedApplication && (
@@ -1949,11 +2250,6 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Talent Pool Candidate Details</DialogTitle>
-              {selectedTalentPoolCandidate && (
-                <DialogDescription className="text-sm text-slate-500">
-                  Candidate snapshot including their original application.
-                </DialogDescription>
-              )}
             </DialogHeader>
             
             {selectedTalentPoolCandidate && (
@@ -2016,11 +2312,11 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
                     </div>
                     <div>
                       <Label className="text-sm font-medium text-gray-500">Employment Type</Label>
-                      <p>{selectedTalentPoolCandidate.applicant_data.employment_type}</p>
+                      <p>{translateStoredValue(selectedTalentPoolCandidate.applicant_data.employment_type, 'employment_type')}</p>
                     </div>
                     <div>
                       <Label className="text-sm font-medium text-gray-500">Shift Preference</Label>
-                      <p>{selectedTalentPoolCandidate.applicant_data.shift_preference}</p>
+                      <p>{translateStoredValue(selectedTalentPoolCandidate.applicant_data.shift_preference, 'shift')}</p>
                     </div>
                   </div>
                 </div>
@@ -2063,11 +2359,6 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
               <DialogTitle>
                 {bulkActionType === 'email' ? 'Send Email Notifications' : 'Reactivate Candidates'}
               </DialogTitle>
-              <DialogDescription className="text-sm text-slate-500">
-                {bulkActionType === 'email'
-                  ? 'Notify selected talent pool candidates about new openings.'
-                  : 'Move selected candidates back into the active pipeline.'}
-              </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4">
@@ -2111,11 +2402,6 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
           <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Application Status History</DialogTitle>
-              {selectedApplication && (
-                <DialogDescription className="text-sm text-slate-500">
-                  Review every change recorded for this submission.
-                </DialogDescription>
-              )}
             </DialogHeader>
             
             {selectedApplication && (
@@ -2186,9 +2472,6 @@ export function ApplicationsTab({ userRole: propUserRole, propertyId: propProper
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Bulk Status Update</DialogTitle>
-              <DialogDescription className="text-sm text-slate-500">
-                Apply a single status to all selected applications.
-              </DialogDescription>
             </DialogHeader>
             
             <div className="space-y-4">

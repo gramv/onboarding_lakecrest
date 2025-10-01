@@ -4,16 +4,18 @@ import { Link, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { 
-  Building2, 
-  Users, 
-  FileText, 
-  BarChart3, 
+import {
+  Building2,
+  Users,
+  FileText,
+  BarChart3,
   UserCheck,
   Menu,
   X,
   LucideIcon,
-  ChevronDown
+  ChevronDown,
+  LayoutDashboard,
+  Send
 } from 'lucide-react'
 
 export interface NavigationItem {
@@ -411,6 +413,14 @@ export function DashboardNavigation({
 // Predefined navigation items for HR and Manager dashboards
 export const HR_NAVIGATION_ITEMS: NavigationItem[] = [
   {
+    key: 'overview',
+    label: 'Overview',
+    path: '/hr/overview',
+    icon: LayoutDashboard,
+    roles: ['hr'],
+    ariaLabel: 'Properties overview and statistics'
+  },
+  {
     key: 'properties',
     label: 'Properties',
     path: '/hr/properties',
@@ -441,6 +451,22 @@ export const HR_NAVIGATION_ITEMS: NavigationItem[] = [
     icon: FileText,
     roles: ['hr'],
     ariaLabel: 'Review job applications and hiring decisions'
+  },
+  {
+    key: 'invitations',
+    label: 'Step Invitations',
+    path: '/hr/invitations',
+    icon: Send,
+    roles: ['hr'],
+    ariaLabel: 'Manage single-step invitations and notification recipients'
+  },
+  {
+    key: 'system-applications',
+    label: 'System Applications',
+    path: '/hr/system-applications',
+    icon: FileText,
+    roles: ['hr'],
+    ariaLabel: 'View all applications across all properties'
   },
   {
     key: 'analytics',

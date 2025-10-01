@@ -9,7 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
-import { Shield, Users, DollarSign, Info, Plus, Trash2 } from 'lucide-react'
+import { Shield, Users, DollarSign, Info, Plus, Trash2, AlertTriangle } from 'lucide-react'
 
 interface Dependent {
   firstName: string
@@ -399,21 +399,36 @@ export default function HealthInsuranceForm({
 
   if (formData.isWaived) {
     return (
-      <div className="space-y-6">
-        <div className="text-center mb-6">
-          <Shield className="h-12 w-12 text-red-600 mx-auto mb-3" />
-          <h2 className="text-2xl font-bold text-gray-900">{t('health_insurance')}</h2>
-          <p className="text-gray-600 mt-2">Coverage Waiver</p>
+      <div className="space-y-8">
+        {/* Waiver Header - Enhanced */}
+        <div className="text-center space-y-4">
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-red-500 to-red-600 shadow-lg">
+            <Shield className="h-10 w-10 text-white" />
+          </div>
+          <div>
+            <h2 className="text-3xl font-bold text-gray-900">{t('health_insurance')}</h2>
+            <p className="text-lg text-red-600 font-medium mt-2">Coverage Waiver</p>
+          </div>
+
+          {/* Professional divider */}
+          <div className="flex items-center justify-center space-x-4 py-3">
+            <div className="h-px w-20 bg-gradient-to-r from-transparent to-red-300"></div>
+            <Shield className="h-4 w-4 text-red-500" />
+            <div className="h-px w-20 bg-gradient-to-l from-transparent to-red-300"></div>
+          </div>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-red-600">Coverage Waiver</CardTitle>
-            <CardDescription>
+        <Card className="border-l-4 border-l-red-500 shadow-lg max-w-3xl mx-auto">
+          <CardHeader className="bg-gradient-to-r from-red-50 to-white">
+            <CardTitle className="text-red-700 flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5" />
+              Coverage Waiver
+            </CardTitle>
+            <CardDescription className="text-red-600">
               You have chosen to decline health insurance coverage.
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6 pt-6">
             <div>
               <Label>Reason for declining coverage</Label>
               <RadioGroup 
@@ -439,7 +454,7 @@ export default function HealthInsuranceForm({
               <div className="space-y-4 p-4 bg-gray-50 rounded-lg">
                 <div>
                   <Label>{t('other_coverage_type')}</Label>
-                  <div className="grid grid-cols-2 gap-2 mt-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mt-2">
                     {['employer_group', 'individual_policy', 'medicare', 'cobra', 'tricare', 'medicaid'].map(type => (
                       <div key={type} className="flex items-center space-x-2">
                         <Checkbox
@@ -461,21 +476,29 @@ export default function HealthInsuranceForm({
               </div>
             )}
 
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               onClick={() => setFormData(prev => ({ ...prev, isWaived: false }))}
-              className="w-full"
+              className="w-full border-blue-300 text-blue-700 hover:bg-blue-50"
             >
               Change Mind - Select Coverage
             </Button>
           </CardContent>
         </Card>
 
-        <div className="flex justify-between items-center pt-6">
-          <Button variant="outline" onClick={onBack}>
+        {/* Navigation - Enhanced */}
+        <div className="flex justify-between items-center pt-4 max-w-3xl mx-auto border-t border-gray-200">
+          <Button
+            variant="outline"
+            onClick={onBack}
+            className="px-6"
+          >
             {t('back')}
           </Button>
-          <Button onClick={handleSubmit} className="px-8">
+          <Button
+            onClick={handleSubmit}
+            className="px-8 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 shadow-md"
+          >
             {t('save_continue')}
           </Button>
         </div>
@@ -484,24 +507,31 @@ export default function HealthInsuranceForm({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="text-center mb-4">
-        <Shield className="h-8 w-8 text-blue-600 mx-auto mb-2" />
-        <h2 className="text-xl font-bold text-gray-900">{t('health_insurance')}</h2>
-        <p className="text-gray-600 text-sm mt-1">{t('health_insurance_desc')}</p>
-        <Badge variant="outline" className="mt-1 text-xs">{t('plan_year')}</Badge>
+    <div className="space-y-6">
+      {/* Header Section - Enhanced */}
+      <div className="text-center space-y-3 pb-4 border-b border-gray-200">
+        <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-md">
+          <Shield className="h-7 w-7 text-white" />
+        </div>
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">{t('health_insurance')}</h2>
+          <p className="text-gray-600 text-sm mt-2 leading-relaxed">{t('health_insurance_desc')}</p>
+          <Badge variant="outline" className="mt-2 text-xs font-medium">{t('plan_year')}</Badge>
+        </div>
       </div>
 
-      {/* Medical Coverage - Compact */}
-      <Card>
-        <CardHeader className="pb-3">
+      {/* Medical Coverage - Enhanced */}
+      <Card className="border-l-4 border-l-blue-500 shadow-md">
+        <CardHeader className="pb-4 bg-gradient-to-r from-blue-50/50 to-transparent">
           <CardTitle className="flex items-center space-x-2 text-lg">
-            <Shield className="h-4 w-4" />
+            <div className="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center">
+              <Shield className="h-4 w-4 text-blue-600" />
+            </div>
             <span>{t('medical_coverage')}</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label className="text-sm">{t('select_plan')}</Label>
               <Select 
@@ -552,13 +582,13 @@ export default function HealthInsuranceForm({
         </CardContent>
       </Card>
 
-      {/* Additional Coverage - Compact */}
-      <Card>
-        <CardHeader className="pb-3">
+      {/* Additional Coverage - Enhanced */}
+      <Card className="border-l-4 border-l-purple-500 shadow-md">
+        <CardHeader className="pb-4 bg-gradient-to-r from-purple-50/50 to-transparent">
           <CardTitle className="text-lg">{t('additional_coverage')}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {/* Dental Coverage */}
             <div className="border rounded p-3">
               <div className="flex items-center justify-between mb-2">
@@ -630,16 +660,18 @@ export default function HealthInsuranceForm({
         </CardContent>
       </Card>
 
-      {/* Dependents Section - Compact */}
+      {/* Dependents Section - Enhanced */}
       {requiresDependents() && (
-        <Card>
-          <CardHeader className="pb-3">
+        <Card className="border-l-4 border-l-green-500 shadow-md">
+          <CardHeader className="pb-4 bg-gradient-to-r from-green-50/50 to-transparent">
             <CardTitle className="flex items-center space-x-2 text-lg">
-              <Users className="h-4 w-4" />
+              <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
+                <Users className="h-4 w-4 text-green-600" />
+              </div>
               <span>{t('dependents_info')}</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             {formData.dependents.map((dependent, index) => (
               <div key={index} className="p-3 border rounded space-y-2">
                 <div className="flex justify-between items-center">
@@ -653,7 +685,7 @@ export default function HealthInsuranceForm({
                   </Button>
                 </div>
                 
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
                   <div>
                     <Label className="text-xs">{t('first_name')}</Label>
                     <Input
@@ -702,7 +734,7 @@ export default function HealthInsuranceForm({
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <div>
                     <Label className="text-xs">{t('ssn')}</Label>
                     <Input
@@ -738,7 +770,7 @@ export default function HealthInsuranceForm({
             </Button>
 
             {/* Compact Questions */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-2 border-t">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2 border-t">
               <div>
                 <Label className="text-xs">{t('stepchildren_question')}</Label>
                 <div className="flex space-x-3 mt-1">
@@ -820,13 +852,16 @@ export default function HealthInsuranceForm({
         </Card>
       )}
 
-      {/* Cost Summary & Options - Combined */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <Card className="bg-blue-50">
-          <CardHeader className="pb-3">
+      {/* Cost Summary & Options - Enhanced */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Cost Summary Card */}
+        <Card className="border-l-4 border-l-blue-500 bg-gradient-to-br from-blue-50 to-white shadow-md">
+          <CardHeader className="pb-4">
             <CardTitle className="flex items-center space-x-2 text-lg">
-              <DollarSign className="h-4 w-4" />
-              <span>{t('cost_summary')}</span>
+              <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center">
+                <DollarSign className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-blue-900">{t('cost_summary')}</span>
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -859,11 +894,17 @@ export default function HealthInsuranceForm({
           </CardContent>
         </Card>
 
-        <Card className="border-red-200">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg text-red-600">Coverage Options</CardTitle>
+        {/* Waiver Options Card */}
+        <Card className="border-l-4 border-l-red-500 bg-gradient-to-br from-red-50 to-white shadow-md">
+          <CardHeader className="pb-4">
+            <CardTitle className="flex items-center space-x-2 text-lg">
+              <div className="w-8 h-8 rounded-lg bg-red-500 flex items-center justify-center">
+                <AlertTriangle className="h-4 w-4 text-white" />
+              </div>
+              <span className="text-red-900">Coverage Options</span>
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-3">
+          <CardContent className="space-y-4">
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="decline_coverage"
@@ -875,23 +916,34 @@ export default function HealthInsuranceForm({
               </Label>
             </div>
             
-            <Alert className="py-2">
-              <Info className="h-3 w-3" />
-              <AlertDescription className="text-xs">
-                <strong>{t('special_enrollment')}</strong><br />
-                {t('enrollment_notice')}
-              </AlertDescription>
+            <Alert className="bg-blue-50 border-blue-200">
+              <div className="flex gap-2">
+                <Info className="h-4 w-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <AlertDescription className="text-xs text-blue-900">
+                  <strong>{t('special_enrollment')}</strong><br />
+                  <span className="text-blue-800">{t('enrollment_notice')}</span>
+                </AlertDescription>
+              </div>
             </Alert>
           </CardContent>
         </Card>
       </div>
 
-      {/* Navigation - Compact */}
-      <div className="flex justify-between items-center pt-4">
-        <Button variant="outline" onClick={onBack} size="sm">
+      {/* Navigation - Enhanced */}
+      <div className="flex justify-between items-center pt-6 border-t border-gray-200">
+        <Button
+          variant="outline"
+          onClick={onBack}
+          size="default"
+          className="px-6"
+        >
           {t('back')}
         </Button>
-        <Button onClick={handleSubmit} className="px-6" size="sm">
+        <Button
+          onClick={handleSubmit}
+          className="px-8 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 shadow-md"
+          size="default"
+        >
           {t('save_continue')}
         </Button>
       </div>

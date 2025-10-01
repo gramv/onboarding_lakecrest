@@ -7,24 +7,30 @@ import { CheckCircle, FileText, Users, Shield, Clock } from 'lucide-react'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
+import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 import { useAutoSave } from '@/hooks/useAutoSave'
 import { useStepValidation } from '@/hooks/useStepValidation'
 import { finalReviewValidator } from '@/utils/stepValidators'
+import { Button } from '@/components/ui/button'
 
 export default function FinalReviewStep({
   currentStep,
   progress,
   markStepComplete,
   saveProgress,
+  advanceToNextStep,
+  goToPreviousStep,
   language = 'en',
   employee,
-  property
+  property,
+  canProceedToNext: _canProceedToNext
 }: StepProps) {
   
   const [isComplete, setIsComplete] = useState(false)
   const [finalAcknowledgments, setFinalAcknowledgments] = useState([false, false, false, false])
   const [signatureData, setSignatureData] = useState(null)
   const [reviewData, setReviewData] = useState(null)
+  const [isAdvancing, setIsAdvancing] = useState(false)
 
   // Validation hook
   const { errors, validate } = useStepValidation(finalReviewValidator)
@@ -327,6 +333,20 @@ export default function FinalReviewStep({
       <div className="text-center text-sm text-gray-500">
         <p>{t.estimatedTime}</p>
       </div>
+
+      {/* Navigation */}
+      <NavigationButtons
+        showPrevious={true}
+        showNext={true}
+        onPrevious={goToPreviousStep || (() => {})}
+        onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
+        disabled={saveStatus?.saving || !isComplete || isAdvancing}
+        saving={saveStatus?.saving}
+        hasErrors={!!errors && errors.length > 0}
+        language={language}
+        nextButtonText={'Complete Onboarding'}
+      />
+
       </div>
       </StepContentWrapper>
     </StepContainer>

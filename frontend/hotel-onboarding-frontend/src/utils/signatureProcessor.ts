@@ -47,26 +47,40 @@ export async function processSignatureForPDF(signatureDataUrl: string): Promise<
           const b = data[idx + 2]
           const a = data[idx + 3]
           
-          // Check if pixel is not white/light gray (signature ink)
-          // Lower threshold to catch more of the signature
-          const isSignature = r < 250 || g < 250 || b < 250
-          
-          if (isSignature) {
+          // Debug first few pixels to understand the data
+          if (x < 5 && y < 5) {
+            console.log(`Pixel (${x},${y}): R=${r}, G=${g}, B=${b}, A=${a}`)
+          }
+
+          // Check if pixel is white or very light (canvas background)
+          // Use a more conservative threshold to catch actual signature pixels
+          const isWhiteBackground = r > 240 && g > 240 && b > 240
+
+          if (isWhiteBackground) {
+            // Preserve existing transparent pixels, otherwise clear the background
+            if (a === 0) {
+              data[idx + 3] = 0
+            } else {
+              data[idx + 3] = 0   // Alpha = 0 (transparent)
+            }
+          } else {
+            // This is signature ink - track bounds
             minX = Math.min(minX, x)
             minY = Math.min(minY, y)
             maxX = Math.max(maxX, x)
             maxY = Math.max(maxY, y)
-            
-            // Make signature pure black
-            // Force all signature pixels to be completely black
-            data[idx] = 0         // Red = 0 (black)
-            data[idx + 1] = 0     // Green = 0 (black)
-            data[idx + 2] = 0     // Blue = 0 (black)
-            // Ensure full opacity for signature pixels
-            data[idx + 3] = 255
-          } else {
-            // Make white/light pixels transparent
-            data[idx + 3] = 0 // Set alpha to 0
+
+            // Keep signature pixels fully opaque with original color
+            if (a === 0) {
+              data[idx + 3] = 0
+            } else {
+              data[idx + 3] = 255 // Alpha = 255 (fully opaque)
+            }
+
+            // Debug signature pixels
+            if (x < 5 && y < 5) {
+              console.log(`Signature pixel (${x},${y}): R=${r}, G=${g}, B=${b} -> keeping opaque`)
+            }
           }
         }
       }
@@ -105,6 +119,39 @@ export async function processSignatureForPDF(signatureDataUrl: string): Promise<
       
       // Convert to PNG data URL (preserves transparency)
       const processedDataUrl = croppedCanvas.toDataURL('image/png')
+
+      // Debug logging - more detailed
+      console.log('🖊️ Signature processing complete:', {
+        originalSize: { width: canvas.width, height: canvas.height },
+        croppedSize: { width: croppedCanvas.width, height: croppedCanvas.height },
+        bounds: { minX, minY, maxX, maxY },
+        hasSignature: minX < Infinity,
+        processedDataUrl: processedDataUrl.substring(0, 100) + '...'
+      })
+
+      // Additional debug: check if we actually have transparent pixels
+      const transparencyCheckCtx = croppedCanvas.getContext('2d')
+      if (!transparencyCheckCtx) {
+        reject(new Error('Failed to get transparency check context'))
+        return
+      }
+
+      const croppedData = transparencyCheckCtx.getImageData(0, 0, croppedCanvas.width, croppedCanvas.height)
+      let transparentPixels = 0
+      let opaquePixels = 0
+
+      for (let i = 3; i < croppedData.data.length; i += 4) {
+        if (croppedData.data[i] === 0) transparentPixels++
+        else if (croppedData.data[i] === 255) opaquePixels++
+      }
+
+      console.log('🔍 Transparency check:', {
+        transparentPixels,
+        opaquePixels,
+        totalPixels: croppedData.data.length / 4,
+        transparencyRatio: transparentPixels / (croppedData.data.length / 4)
+      })
+
       resolve(processedDataUrl)
     }
     

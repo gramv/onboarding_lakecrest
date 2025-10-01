@@ -26,6 +26,7 @@ import {
 } from 'lucide-react'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import axios from 'axios'
+import { getApiUrl } from '@/config/api'
 
 interface DocumentOption {
   id: string
@@ -38,8 +39,9 @@ interface DocumentOption {
 
 interface UploadedDocument {
   id: string
-  file: File
+  file: File | null
   type: string
+  category?: string
   status: 'uploading' | 'processing' | 'complete' | 'error'
   extractedData?: {
     documentNumber?: string
@@ -47,6 +49,23 @@ interface UploadedDocument {
     issuingAuthority?: string
   }
   error?: string
+  storageMetadata?: any
+}
+
+const DOCUMENT_CATEGORY_MAP: Record<string, string> = {
+  us_passport: 'list_a',
+  permanent_resident_card: 'list_a',
+  foreign_passport: 'list_a',
+  employment_authorization_card: 'list_a',
+  drivers_license: 'dl',
+  state_id: 'list_b',
+  school_id: 'list_b',
+  social_security_card: 'ssn',
+  birth_certificate: 'list_c'
+}
+
+const getDocumentCategory = (docType: string): string => {
+  return DOCUMENT_CATEGORY_MAP[docType] || 'other'
 }
 
 const DOCUMENT_OPTIONS: DocumentOption[] = [
@@ -130,11 +149,13 @@ const DOCUMENT_OPTIONS: DocumentOption[] = [
 export default function DocumentUploadEnhanced({
   onComplete,
   language = 'en',
-  initialData
+  initialData,
+  employee
 }: {
   onComplete: (data: any) => void
   language?: 'en' | 'es'
   initialData?: any
+  employee?: any
 }) {
   const [documentChoice, setDocumentChoice] = useState<'passport' | 'dl_ssn' | 'other'>('')
   const [selectedDocuments, setSelectedDocuments] = useState<string[]>([])
@@ -154,7 +175,9 @@ export default function DocumentUploadEnhanced({
         // Restore uploaded documents but not the actual File objects
         const restoredDocs = initialData.uploadedDocuments.map((doc: any) => ({
           ...doc,
-          file: null, // Can't restore File objects from JSON
+          file: null,
+          originalFile: null,
+          category: doc.category || getDocumentCategory(doc.type || doc.documentType || ''),
           status: doc.status === 'complete' ? 'complete' : 'error'
         }))
         setUploadedDocuments(restoredDocs)
@@ -165,7 +188,9 @@ export default function DocumentUploadEnhanced({
         const docsFromExtracted = initialData.extractedData.map((doc: any) => ({
           id: doc.id || `doc-${Date.now()}-${Math.random()}`,
           file: null,
+          originalFile: null,
           type: doc.type || doc.documentType,
+          category: doc.category || getDocumentCategory(doc.type || doc.documentType || ''),
           status: 'complete' as const,
           extractedData: doc
         }))
@@ -184,7 +209,9 @@ export default function DocumentUploadEnhanced({
             // Restore uploaded documents but not the actual File objects
             const restoredDocs = parsed.uploadedDocuments.map((doc: any) => ({
               ...doc,
-              file: null, // Can't restore File objects from JSON
+              file: null,
+              originalFile: null,
+              category: doc.category || getDocumentCategory(doc.type || doc.documentType || ''),
               status: doc.status === 'complete' ? 'complete' : 'error'
             }))
             setUploadedDocuments(restoredDocs)
@@ -198,13 +225,14 @@ export default function DocumentUploadEnhanced({
   
   // Save state whenever it changes
   useEffect(() => {
-    const dataToSave = {
+  const dataToSave = {
       documentChoice,
       selectedDocuments,
       ssn,
       uploadedDocuments: uploadedDocuments.map(doc => ({
         id: doc.id,
         type: doc.type,
+        category: doc.category,
         status: doc.status,
         extractedData: doc.extractedData,
         error: doc.error
@@ -307,6 +335,7 @@ export default function DocumentUploadEnhanced({
       id: docId,
       file,
       type: docType,
+      category: getDocumentCategory(docType),
       status: 'uploading'
     }])
     
@@ -315,16 +344,16 @@ export default function DocumentUploadEnhanced({
       const formData = new FormData()
       formData.append('file', file)
       formData.append('document_type', docType)
-      
+      formData.append('employee_id', employee?.id || '')
+
       // Update status to processing
       setUploadedDocuments(prev => prev.map(doc => 
         doc.id === docId ? { ...doc, status: 'processing' } : doc
       ))
       
       // Call backend API
-      const apiUrl = import.meta.env.VITE_API_URL || '/api'
       const response = await axios.post(
-        `${apiUrl}/api/documents/process`,
+        `${getApiUrl()}/documents/process`,
         formData,
         {
           headers: {
@@ -455,7 +484,10 @@ export default function DocumentUploadEnhanced({
     onComplete({ 
       uploadedDocuments: uploadedDocuments.map(doc => ({
         type: doc.type,
-        fileName: doc.file?.name || `${doc.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`
+        category: doc.category,
+        fileName: doc.file?.name || `${doc.type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}`,
+        file: doc.file,
+        originalFile: doc.file
       })),
       extractedData,
       ssn: documentChoice === 'passport' ? ssn : undefined
@@ -463,7 +495,7 @@ export default function DocumentUploadEnhanced({
   }
   
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-32">
       {/* Document Choice */}
       {!documentChoice && (
         <Card>

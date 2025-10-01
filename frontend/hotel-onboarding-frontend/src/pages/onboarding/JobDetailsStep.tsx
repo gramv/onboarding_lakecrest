@@ -3,7 +3,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Badge } from '@/components/ui/badge'
-import { CheckCircle, Briefcase, Calendar, DollarSign, Building, User } from 'lucide-react'
+import { AlertTriangle, MessageCircle } from 'lucide-react'
+import { CheckCircle, Briefcase, Calendar, DollarSign, Building } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import { StepProps } from '../../controllers/OnboardingFlowController'
 import { StepContainer } from '@/components/onboarding/StepContainer'
 import { StepContentWrapper } from '@/components/onboarding/StepContentWrapper'
@@ -21,11 +23,13 @@ export default function JobDetailsStep({
   
   const [acknowledged, setAcknowledged] = useState(false)
   const [acknowledgedAt, setAcknowledgedAt] = useState<string | null>(null)
+  const [isCompleting, setIsCompleting] = useState(false)
 
   // Form data for auto-save
   const formData = {
     acknowledged,
-    acknowledgedAt
+    acknowledgedAt,
+    isCompleting
   }
 
   // Auto-save hook
@@ -43,24 +47,44 @@ export default function JobDetailsStep({
     }
   }, [currentStep.id, progress.completedSteps])
 
-  // Auto-mark complete when acknowledged
+  // Auto-mark complete when acknowledged (with proper async handling)
   useEffect(() => {
-    if (acknowledged && !progress.completedSteps.includes(currentStep.id)) {
-      markStepComplete(currentStep.id, formData)
+    const completeStep = async () => {
+      if (acknowledged && !progress.completedSteps.includes(currentStep.id) && !isCompleting) {
+        console.log('🎯 JobDetailsStep: Auto-completing step...')
+        setIsCompleting(true)
+        try {
+          await markStepComplete(currentStep.id, formData)
+          console.log('✅ JobDetailsStep: Step completed successfully')
+        } catch (error) {
+          console.error('❌ JobDetailsStep: Failed to complete step:', error)
+          // Reset acknowledged state on error
+          setAcknowledged(false)
+          setAcknowledgedAt(null)
+        } finally {
+          setIsCompleting(false)
+        }
+      }
     }
-  }, [acknowledged, currentStep.id, formData, markStepComplete, progress.completedSteps])
 
-  const handleAcknowledgment = (checked: boolean) => {
-    setAcknowledged(checked)
-    if (checked) {
+    completeStep()
+  }, [acknowledged, currentStep.id, formData, markStepComplete, progress.completedSteps, isCompleting])
+
+  const handleAcknowledgment = async (checked: boolean) => {
+    console.log('🖱️ JobDetailsStep: Acknowledgment changed:', checked)
+
+    if (checked && !isCompleting) {
+      setAcknowledged(checked)
       setAcknowledgedAt(new Date().toISOString())
-    } else {
+      // The useEffect above will handle the completion
+    } else if (!checked) {
+      setAcknowledged(false)
       setAcknowledgedAt(null)
     }
   }
 
-  // Pay rate for display
-  const payRate = 18.50 // Demo rate
+  // Use actual pay rate from employee data, fallback to 0 if not available
+  const payRate = employee?.payRate || employee?.hourlyRate || 0
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-US', {
@@ -116,8 +140,10 @@ export default function JobDetailsStep({
 
   const t = translations[language]
 
+  const canAdvance = acknowledged && !isCompleting
+
   return (
-    <StepContainer saveStatus={saveStatus}>
+    <StepContainer saveStatus={isCompleting ? 'saving' : saveStatus} canProceed={canAdvance}>
       <StepContentWrapper>
         <div className="space-y-6">
         {/* Step Header */}
@@ -129,15 +155,17 @@ export default function JobDetailsStep({
           <p className="text-gray-600 max-w-2xl mx-auto">{t.description}</p>
         </div>
 
-        {/* Completion Notice */}
-        {acknowledged && (
-          <Alert className="bg-green-50 border-green-200">
+        {/* Guidance Banner */}
+        <Alert className={acknowledged ? 'bg-green-50 border-green-200' : 'bg-blue-50 border-blue-200'}>
+          {acknowledged ? (
             <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
-              {t.completedNotice}
-            </AlertDescription>
-          </Alert>
-        )}
+          ) : (
+            <AlertTriangle className="h-4 w-4 text-blue-500" />
+          )}
+          <AlertDescription className={acknowledged ? 'text-green-800' : 'text-blue-800'}>
+            {acknowledged ? t.completedNotice : 'Review the offer details carefully. Accept below to enable the Next button.'}
+          </AlertDescription>
+        </Alert>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column */}
@@ -179,9 +207,11 @@ export default function JobDetailsStep({
                   <p className="text-sm text-gray-600">{t.department}</p>
                   <p>{employee?.department || 'Not specified'}</p>
                 </div>
-                <div>
-                  <Badge variant="secondary">Full Time</Badge>
-                </div>
+                {employee?.employmentType && (
+                  <div>
+                    <Badge variant="secondary">{employee.employmentType}</Badge>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -204,8 +234,14 @@ export default function JobDetailsStep({
                 <div>
                   <p className="text-sm text-gray-600">{t.payRate}</p>
                   <p className="font-semibold">
-                    {formatCurrency(payRate)}
-                    <span className="text-sm text-gray-500 ml-1">/ hour</span>
+                    {payRate ? (
+                      <>
+                        {formatCurrency(payRate)}
+                        <span className="text-sm text-gray-500 ml-1">/ hour</span>
+                      </>
+                    ) : (
+                      'Not specified'
+                    )}
                   </p>
                 </div>
               </CardContent>
@@ -214,37 +250,126 @@ export default function JobDetailsStep({
           </div>
         </div>
 
-        {/* Job Offer Acceptance */}
-        <Card className="border-2 border-blue-200 bg-blue-50">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2 text-blue-800">
-              <CheckCircle className="h-5 w-5" />
-              <span>{t.acknowledgment}</span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-start space-x-3">
-              <Checkbox
-                id="jobOfferAcknowledgment"
-                checked={acknowledged}
-                onCheckedChange={handleAcknowledgment}
-                className="mt-1"
-                disabled={progress.completedSteps.includes(currentStep.id)}
-              />
-              <label
-                htmlFor="jobOfferAcknowledgment"
-                className="text-sm text-blue-800 leading-relaxed cursor-pointer flex-1"
-              >
-                {t.acknowledgmentText}
-              </label>
-            </div>
-            {acknowledgedAt && (
-              <p className="text-xs text-blue-600 mt-2">
-                {t.acknowledgedOn}: {new Date(acknowledgedAt).toLocaleString()}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Job Offer Acceptance - Enhanced Design */}
+        <div className="mt-8">
+          <div className="max-w-4xl mx-auto">
+            <Card className={cn(
+              "relative border-2 transition-all duration-300 overflow-hidden",
+              acknowledged
+                ? "border-green-200 bg-gradient-to-br from-green-50 via-emerald-50 to-green-50 shadow-lg"
+                : "border-blue-200 bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50 hover:border-blue-300 hover:shadow-md"
+            )}>
+              {/* Decorative background pattern */}
+              <div className="absolute inset-0 opacity-5">
+                <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-current rounded-full -translate-y-16 translate-x-16" />
+                <div className="absolute bottom-0 left-0 w-24 h-24 bg-gradient-to-tr from-current rounded-full translate-y-12 -translate-x-12" />
+              </div>
+
+              <CardHeader className="relative pb-4">
+                <CardTitle className={cn(
+                  "flex items-center space-x-3 text-lg font-semibold transition-colors duration-200",
+                  acknowledged ? "text-green-800" : "text-blue-800"
+                )}>
+                  <div className={cn(
+                    "p-2 rounded-full transition-colors duration-200",
+                    acknowledged ? "bg-green-100" : "bg-blue-100"
+                  )}>
+                    <CheckCircle className="h-5 w-5" />
+                  </div>
+                  <span>{t.acknowledgment}</span>
+                </CardTitle>
+              </CardHeader>
+
+              <CardContent className="relative pt-0">
+                <div className={cn(
+                  "rounded-xl p-6 border transition-all duration-300",
+                  acknowledged
+                    ? "border-green-200 bg-white/70 shadow-sm"
+                    : "border-blue-200 bg-white/70 hover:bg-white/90"
+                )}>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-shrink-0 mt-1">
+                      <Checkbox
+                        id="jobOfferAcknowledgment"
+                        checked={acknowledged}
+                        onCheckedChange={handleAcknowledgment}
+                        disabled={isCompleting}
+                        className={cn(
+                          "transition-all duration-200 scale-110",
+                          isCompleting && "opacity-50 cursor-not-allowed",
+                          acknowledged
+                            ? "border-green-500 data-[state=checked]:bg-green-600"
+                            : "border-blue-400 hover:border-blue-500"
+                        )}
+                      />
+                    </div>
+
+                    <div className="flex-1">
+                      <label
+                        htmlFor="jobOfferAcknowledgment"
+                        className={cn(
+                          "text-base font-medium leading-relaxed block transition-colors duration-200",
+                          isCompleting ? "cursor-wait opacity-75" : "cursor-pointer",
+                          acknowledged ? "text-green-800" : "text-blue-800 hover:text-blue-900"
+                        )}
+                      >
+                        {isCompleting ? "Processing acceptance..." : t.acknowledgmentText}
+                      </label>
+
+                      {acknowledged && acknowledgedAt && !isCompleting && (
+                        <div className="mt-4 flex items-center gap-2 text-sm text-green-700 bg-green-100/50 rounded-lg p-3">
+                          <CheckCircle className="h-4 w-4 flex-shrink-0" />
+                          <div>
+                            <p className="font-medium">Job offer accepted!</p>
+                            <p className="text-xs text-green-600 mt-1">
+                              {t.acknowledgedOn}: {new Date(acknowledgedAt).toLocaleDateString()} at {new Date(acknowledgedAt).toLocaleTimeString()}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {isCompleting && (
+                        <div className="mt-4 flex items-center gap-2 text-sm text-blue-700 bg-blue-100/50 rounded-lg p-3">
+                          <div className="h-4 w-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                          <div>
+                            <p className="font-medium">Saving your acceptance...</p>
+                            <p className="text-xs text-blue-600 mt-1">Please wait while we process your job offer acceptance.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {!acknowledged && (
+                  <div className="mt-4 text-center">
+                    <p className="text-sm text-gray-600 flex items-center justify-center gap-2">
+                      <span className="w-2 h-2 bg-blue-400 rounded-full animate-pulse"></span>
+                      Please review and accept the job offer to continue
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-gray-200 bg-white p-4 text-sm text-gray-600">
+          <div className="flex items-center gap-2">
+            <MessageCircle className="h-4 w-4 text-gray-500" />
+            <span>Need help? Contact HR for clarification before accepting.</span>
+          </div>
+          <a
+            href="mailto:hr@hotel.com"
+            className="rounded border border-blue-600 px-3 py-1 text-xs text-blue-600 hover:bg-blue-50"
+          >
+            hr@hotel.com
+          </a>
+        </div>
+
+        <div className="rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800">
+          Once you continue, you’ll review five short policy sections. We’ll guide you through them one by one.
+        </div>
         </div>
       </StepContentWrapper>
     </StepContainer>

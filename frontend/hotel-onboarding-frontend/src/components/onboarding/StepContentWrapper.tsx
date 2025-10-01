@@ -13,7 +13,7 @@ interface StepContentWrapperProps {
 export function StepContentWrapper({ children, className }: StepContentWrapperProps) {
   return (
     <div className={cn(
-      "w-full max-w-4xl mx-auto", // Consistent max width for all steps
+      "w-full max-w-4xl mx-auto px-4 sm:px-0 pb-32", // Consistent max width with mobile padding and bottom space for sticky nav
       className
     )}>
       {children}

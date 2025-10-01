@@ -291,7 +291,6 @@ export default function PersonalInformationForm({
   return (
     <div className="flex-container-adaptive">
       <div className="text-center container-responsive">
-        <User className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 mx-auto mb-2" />
         <h2 className="sr-only text-responsive-lg font-bold text-gray-900">{t('personal_info')}</h2>
         <p className="sr-only text-responsive-base text-gray-600 mt-1 max-w-4xl mx-auto leading-relaxed">{t('personal_info_desc')}</p>
       </div>
@@ -495,50 +494,50 @@ export default function PersonalInformationForm({
           {/* Demographics - Horizontal layout */}
           <div className="border-t pt-2 mt-2">
             <h4 className="text-xs font-semibold text-gray-700 mb-2">{t('demographics')} <span className="text-xs text-gray-500">(Optional)</span></h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <Label className="text-xs font-medium">{t('gender')}</Label>
-                <RadioGroup value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)} className="flex flex-wrap gap-3 mt-1">
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="male" id="male" className="h-3 w-3" />
-                    <Label htmlFor="male" className="text-xs">{t('male')}</Label>
+                <RadioGroup value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)} className="flex flex-col sm:flex-row gap-4 mt-2">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="male" id="male" />
+                    <Label htmlFor="male" className="text-sm font-normal cursor-pointer">{t('male')}</Label>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="female" id="female" className="h-3 w-3" />
-                    <Label htmlFor="female" className="text-xs">{t('female')}</Label>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="female" id="female" />
+                    <Label htmlFor="female" className="text-sm font-normal cursor-pointer">{t('female')}</Label>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="other" id="other" className="h-3 w-3" />
-                    <Label htmlFor="other" className="text-xs">{t('other')}</Label>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="other" id="other" />
+                    <Label htmlFor="other" className="text-sm font-normal cursor-pointer">{t('other')}</Label>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="prefer_not_say" id="prefer_not_say" className="h-3 w-3" />
-                    <Label htmlFor="prefer_not_say" className="text-xs">{t('prefer_not_say')}</Label>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="prefer_not_say" id="prefer_not_say" />
+                    <Label htmlFor="prefer_not_say" className="text-sm font-normal cursor-pointer">{t('prefer_not_say')}</Label>
                   </div>
                 </RadioGroup>
               </div>
               <div>
                 <Label className="text-xs font-medium">{t('marital_status')}</Label>
-                <RadioGroup value={formData.maritalStatus} onValueChange={(value) => handleInputChange('maritalStatus', value)} className="flex flex-wrap gap-3 mt-1">
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="single" id="single" className="h-3 w-3" />
-                    <Label htmlFor="single" className="text-xs">{t('single')}</Label>
+                <RadioGroup value={formData.maritalStatus} onValueChange={(value) => handleInputChange('maritalStatus', value)} className="flex flex-col sm:flex-row sm:flex-wrap gap-4 mt-2">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="single" id="single" />
+                    <Label htmlFor="single" className="text-sm font-normal cursor-pointer">{t('single')}</Label>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="married" id="married" className="h-3 w-3" />
-                    <Label htmlFor="married" className="text-xs">{t('married')}</Label>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="married" id="married" />
+                    <Label htmlFor="married" className="text-sm font-normal cursor-pointer">{t('married')}</Label>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="divorced" id="divorced" className="h-3 w-3" />
-                    <Label htmlFor="divorced" className="text-xs">{t('divorced')}</Label>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="divorced" id="divorced" />
+                    <Label htmlFor="divorced" className="text-sm font-normal cursor-pointer">{t('divorced')}</Label>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="widowed" id="widowed" className="h-3 w-3" />
-                    <Label htmlFor="widowed" className="text-xs">{t('widowed')}</Label>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="widowed" id="widowed" />
+                    <Label htmlFor="widowed" className="text-sm font-normal cursor-pointer">{t('widowed')}</Label>
                   </div>
-                  <div className="flex items-center space-x-1">
-                    <RadioGroupItem value="separated" id="separated" className="h-3 w-3" />
-                    <Label htmlFor="separated" className="text-xs">{t('separated')}</Label>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="separated" id="separated" />
+                    <Label htmlFor="separated" className="text-sm font-normal cursor-pointer">{t('separated')}</Label>
                   </div>
                 </RadioGroup>
               </div>
@@ -565,26 +564,10 @@ export default function PersonalInformationForm({
         <span>{t('privacy_notice')}</span>
       </div>
 
-      {/* Navigation - Compact */}
-      {!useMainNavigation && (
-        <div className="flex justify-between items-center pt-4">
-          {onBack && (
-            <Button variant="outline" onClick={onBack} size="sm">
-              {t('back')}
-            </Button>
-          )}
-          <Button onClick={handleSubmit} className="px-6" size="sm" disabled={!isValid}>
-            {t('save_continue')}
-          </Button>
-        </div>
-      )}
-      
-      {/* Hidden save button for main navigation */}
-      {useMainNavigation && (
-        <Button onClick={handleSubmit} className="hidden" disabled={!isValid}>
-          Save Personal Info
-        </Button>
-      )}
+      {/* Hidden submit allows parent navigation to trigger validation */}
+      <Button onClick={handleSubmit} className="hidden" disabled={!isValid}>
+        Save Personal Info
+      </Button>
 
       {/* Form validation indicator for parent component */}
       <div className="hidden" data-form-valid={isValid} data-form-errors={JSON.stringify(errors)} />

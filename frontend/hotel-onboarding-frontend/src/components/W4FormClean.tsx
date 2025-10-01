@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -13,6 +13,7 @@ interface W4FormCleanProps {
   initialData?: any
   language?: 'en' | 'es'
   employeeId?: string
+  isLocked?: boolean
 }
 
 interface FormData {
@@ -55,53 +56,61 @@ export default function W4FormClean({
   onComplete,
   initialData = {},
   language = 'en',
-  employeeId
+  employeeId,
+  isLocked = false
 }: W4FormCleanProps) {
   const [currentStep, setCurrentStep] = useState(0)
   
-  const [formData, setFormData] = useState<FormData>({
-    first_name: initialData.first_name || '',
-    middle_initial: initialData.middle_initial || '',
-    last_name: initialData.last_name || '',
-    address: initialData.address || '',
-    apt_number: initialData.apt_number || '',
-    city: initialData.city || '',
-    state: initialData.state || '',
-    zip_code: initialData.zip_code || '',
-    ssn: initialData.ssn || '',
-    filing_status: initialData.filing_status || 'single',
-    multiple_jobs: initialData.multiple_jobs || false,
-    qualifying_children: initialData.qualifying_children || 0,
-    other_dependents: initialData.other_dependents || 0,
-    other_income: initialData.other_income || '',
-    deductions: initialData.deductions || '',
-    extra_withholding: initialData.extra_withholding || ''
-  })
+  const [formData, setFormData] = useState<FormData>(() => ({
+    first_name: initialData?.first_name ?? '',
+    middle_initial: initialData?.middle_initial ?? '',
+    last_name: initialData?.last_name ?? '',
+    address: initialData?.address ?? '',
+    apt_number: initialData?.apt_number ?? '',
+    city: initialData?.city ?? '',
+    state: initialData?.state ?? '',
+    zip_code: initialData?.zip_code ?? '',
+    ssn: initialData?.ssn ?? '',
+    filing_status: initialData?.filing_status ?? 'single',
+    multiple_jobs: initialData?.multiple_jobs ?? false,
+    qualifying_children: initialData?.qualifying_children ?? 0,
+    other_dependents: initialData?.other_dependents ?? 0,
+    other_income: initialData?.other_income ?? '',
+    deductions: initialData?.deductions ?? '',
+    extra_withholding: initialData?.extra_withholding ?? ''
+  }))
 
   const [errors, setErrors] = useState<Record<string, string>>({})
+  const hydrationSignatureRef = useRef<string>('')
 
   // Update form data when initialData changes
   useEffect(() => {
     if (initialData && Object.keys(initialData).length > 0) {
+      const signature = JSON.stringify(initialData)
+      if (signature === hydrationSignatureRef.current) {
+        return
+      }
+
+      hydrationSignatureRef.current = signature
       console.log('W4FormClean - Updating form data from initialData:', initialData)
-      setFormData({
-        first_name: initialData.first_name || '',
-        middle_initial: initialData.middle_initial || '',
-        last_name: initialData.last_name || '',
-        address: initialData.address || '',
-        apt_number: initialData.apt_number || '',
-        city: initialData.city || '',
-        state: initialData.state || '',
-        zip_code: initialData.zip_code || '',
-        ssn: initialData.ssn || '',
-        filing_status: initialData.filing_status || 'single',
-        multiple_jobs: initialData.multiple_jobs || false,
-        qualifying_children: initialData.qualifying_children || 0,
-        other_dependents: initialData.other_dependents || 0,
-        other_income: initialData.other_income || '',
-        deductions: initialData.deductions || '',
-        extra_withholding: initialData.extra_withholding || ''
-      })
+      setFormData(prev => ({
+        first_name: initialData.first_name ?? prev.first_name ?? '',
+        middle_initial: initialData.middle_initial ?? prev.middle_initial ?? '',
+        last_name: initialData.last_name ?? prev.last_name ?? '',
+        address: initialData.address ?? prev.address ?? '',
+        apt_number: initialData.apt_number ?? prev.apt_number ?? '',
+        city: initialData.city ?? prev.city ?? '',
+        state: initialData.state ?? prev.state ?? '',
+        zip_code: initialData.zip_code ?? prev.zip_code ?? '',
+        ssn: initialData.ssn ?? prev.ssn ?? '',
+        filing_status: initialData.filing_status ?? prev.filing_status ?? 'single',
+        multiple_jobs: initialData.multiple_jobs ?? prev.multiple_jobs ?? false,
+        qualifying_children: initialData.qualifying_children ?? prev.qualifying_children ?? 0,
+        other_dependents: initialData.other_dependents ?? prev.other_dependents ?? 0,
+        other_income: initialData.other_income ?? prev.other_income ?? '',
+        deductions: initialData.deductions ?? prev.deductions ?? '',
+        extra_withholding: initialData.extra_withholding ?? prev.extra_withholding ?? ''
+      }))
     }
   }, [initialData])
 
@@ -129,6 +138,7 @@ export default function W4FormClean({
   ]
 
   const handleInputChange = (field: keyof FormData, value: any) => {
+    if (isLocked) return
     setFormData(prev => ({ ...prev, [field]: value }))
     // Clear error when user types
     if (errors[field]) {
@@ -191,6 +201,7 @@ export default function W4FormClean({
   }
 
   const handleNext = () => {
+    if (isLocked) return
     if (validateStep(currentStep)) {
       if (currentStep < steps.length - 1) {
         setCurrentStep(currentStep + 1)
@@ -211,6 +222,7 @@ export default function W4FormClean({
   }
 
   const handlePrevious = () => {
+    if (isLocked) return
     if (currentStep > 0) {
       setCurrentStep(currentStep - 1)
     }
@@ -255,6 +267,13 @@ export default function W4FormClean({
             <div className="space-y-4">
               <h3 className="text-lg font-semibold">Personal Information</h3>
               <p className="text-sm text-gray-600">Enter your personal details as they appear on your Social Security card</p>
+              {isLocked && (
+                <Alert className="bg-blue-50 border-blue-200">
+                  <AlertDescription className="text-blue-800 text-sm">
+                    This form has been signed. Editing is disabled to maintain compliance.
+                  </AlertDescription>
+                </Alert>
+              )}
               
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -264,6 +283,7 @@ export default function W4FormClean({
                     value={formData.first_name}
                     onChange={(e) => handleInputChange('first_name', e.target.value)}
                     className={errors.first_name ? 'border-red-500' : ''}
+                    disabled={isLocked}
                   />
                   {errors.first_name && (
                     <p className="text-sm text-red-500 mt-1">{errors.first_name}</p>
@@ -278,6 +298,7 @@ export default function W4FormClean({
                     onChange={(e) => handleInputChange('middle_initial', e.target.value.slice(0, 1).toUpperCase())}
                     maxLength={1}
                     className="w-20"
+                    disabled={isLocked}
                   />
                 </div>
               </div>
@@ -289,6 +310,7 @@ export default function W4FormClean({
                   value={formData.last_name}
                   onChange={(e) => handleInputChange('last_name', e.target.value)}
                   className={errors.last_name ? 'border-red-500' : ''}
+                  disabled={isLocked}
                 />
                 {errors.last_name && (
                   <p className="text-sm text-red-500 mt-1">{errors.last_name}</p>
@@ -303,6 +325,7 @@ export default function W4FormClean({
                   onChange={(e) => handleInputChange('address', e.target.value)}
                   className={errors.address ? 'border-red-500' : ''}
                   placeholder="123 Main Street"
+                  disabled={isLocked}
                 />
                 {errors.address && (
                   <p className="text-sm text-red-500 mt-1">{errors.address}</p>
@@ -317,6 +340,7 @@ export default function W4FormClean({
                     value={formData.apt_number}
                     onChange={(e) => handleInputChange('apt_number', e.target.value)}
                     placeholder="Optional"
+                    disabled={isLocked}
                   />
                 </div>
                 
@@ -327,6 +351,7 @@ export default function W4FormClean({
                     value={formData.city}
                     onChange={(e) => handleInputChange('city', e.target.value)}
                     className={errors.city ? 'border-red-500' : ''}
+                    disabled={isLocked}
                   />
                   {errors.city && (
                     <p className="text-sm text-red-500 mt-1">{errors.city}</p>
@@ -342,6 +367,7 @@ export default function W4FormClean({
                     value={formData.state}
                     onChange={(e) => handleInputChange('state', e.target.value)}
                     className={`w-full h-10 px-3 rounded-md border ${errors.state ? 'border-red-500' : 'border-gray-300'} focus:outline-none focus:ring-2 focus:ring-blue-500`}
+                    disabled={isLocked}
                   >
                     <option value="">Select State</option>
                     {STATES.map(state => (
@@ -361,6 +387,7 @@ export default function W4FormClean({
                     onChange={(e) => handleInputChange('zip_code', e.target.value)}
                     className={errors.zip_code ? 'border-red-500' : ''}
                     placeholder="12345"
+                    disabled={isLocked}
                   />
                   {errors.zip_code && (
                     <p className="text-sm text-red-500 mt-1">{errors.zip_code}</p>
@@ -380,6 +407,7 @@ export default function W4FormClean({
                   className={errors.ssn ? 'border-red-500' : ''}
                   placeholder="123-45-6789"
                   maxLength={11}
+                  disabled={isLocked}
                 />
                 {errors.ssn && (
                   <p className="text-sm text-red-500 mt-1">{errors.ssn}</p>
@@ -400,24 +428,25 @@ export default function W4FormClean({
                   value={formData.filing_status}
                   onValueChange={(value: any) => handleInputChange('filing_status', value)}
                   className="mt-3 space-y-3"
+                  disabled={isLocked}
                 >
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="single" id="single" />
-                    <Label htmlFor="single" className="font-normal cursor-pointer">
+                    <RadioGroupItem value="single" id="single" disabled={isLocked} />
+                    <Label htmlFor="single" className={`font-normal ${isLocked ? 'cursor-not-allowed text-gray-500' : 'cursor-pointer'}`}>
                       Single or Married filing separately
                     </Label>
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="married_filing_jointly" id="married" />
-                    <Label htmlFor="married" className="font-normal cursor-pointer">
+                    <RadioGroupItem value="married_filing_jointly" id="married" disabled={isLocked} />
+                    <Label htmlFor="married" className={`font-normal ${isLocked ? 'cursor-not-allowed text-gray-500' : 'cursor-pointer'}`}>
                       Married filing jointly (or Qualifying surviving spouse)
                     </Label>
                   </div>
                   
                   <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="head_of_household" id="head" />
-                    <Label htmlFor="head" className="font-normal cursor-pointer">
+                    <RadioGroupItem value="head_of_household" id="head" disabled={isLocked} />
+                    <Label htmlFor="head" className={`font-normal ${isLocked ? 'cursor-not-allowed text-gray-500' : 'cursor-pointer'}`}>
                       Head of household (Check only if you're unmarried and pay more than half the costs of keeping up a home for yourself and a qualifying individual)
                     </Label>
                   </div>
@@ -425,10 +454,11 @@ export default function W4FormClean({
               </div>
 
               <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                <Label className="flex items-center space-x-2">
+                <Label className={`flex items-center space-x-2 ${isLocked ? 'cursor-not-allowed text-gray-500' : ''}`}>
                   <Checkbox
                     checked={formData.multiple_jobs}
                     onCheckedChange={(checked) => handleInputChange('multiple_jobs', checked)}
+                    disabled={isLocked}
                   />
                   <span className="font-normal">
                     Complete this step if you (1) hold more than one job at a time, or (2) are married filing jointly and your spouse also works
@@ -465,7 +495,8 @@ export default function W4FormClean({
                       min="0"
                       value={formData.qualifying_children}
                       onChange={(e) => handleInputChange('qualifying_children', parseInt(e.target.value) || 0)}
-                      className="w-20"
+                      className={`w-20 ${isLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={isLocked}
                     />
                     <span className="text-sm text-gray-600">× $2,000 = ${formData.qualifying_children * 2000}</span>
                   </div>
@@ -485,7 +516,8 @@ export default function W4FormClean({
                       min="0"
                       value={formData.other_dependents}
                       onChange={(e) => handleInputChange('other_dependents', parseInt(e.target.value) || 0)}
-                      className="w-20"
+                      className={`w-20 ${isLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={isLocked}
                     />
                     <span className="text-sm text-gray-600">× $500 = ${formData.other_dependents * 500}</span>
                   </div>
@@ -525,9 +557,13 @@ export default function W4FormClean({
                     <span className="text-gray-600">$</span>
                     <Input
                       id="other_income"
+                      type="number"
+                      min="0"
                       value={formData.other_income}
                       onChange={(e) => handleInputChange('other_income', formatCurrency(e.target.value))}
-                      placeholder="0.00"
+                      placeholder="0"
+                      className={`w-full ${isLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={isLocked}
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -543,9 +579,13 @@ export default function W4FormClean({
                     <span className="text-gray-600">$</span>
                     <Input
                       id="deductions"
+                      type="number"
+                      min="0"
                       value={formData.deductions}
                       onChange={(e) => handleInputChange('deductions', formatCurrency(e.target.value))}
-                      placeholder="0.00"
+                      placeholder="0"
+                      className={`w-full ${isLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={isLocked}
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -561,9 +601,13 @@ export default function W4FormClean({
                     <span className="text-gray-600">$</span>
                     <Input
                       id="extra_withholding"
+                      type="number"
+                      min="0"
                       value={formData.extra_withholding}
                       onChange={(e) => handleInputChange('extra_withholding', formatCurrency(e.target.value))}
-                      placeholder="0.00"
+                      placeholder="0"
+                      className={`w-full ${isLocked ? 'bg-gray-100 cursor-not-allowed' : ''}`}
+                      disabled={isLocked}
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -581,30 +625,18 @@ export default function W4FormClean({
           )}
 
           {/* Navigation buttons */}
-          <div className="flex justify-between pt-6">
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handlePrevious}
-              disabled={currentStep === 0}
-            >
-              <ChevronLeft className="mr-2 h-4 w-4" />
-              Previous
+          <div className="mt-6 flex justify-between">
+            <Button variant="outline" onClick={handlePrevious} disabled={currentStep === 0 || isLocked}>
+              <ChevronLeft className="h-4 w-4 mr-2" /> Previous
             </Button>
-            
-            <Button
-              type="button"
-              onClick={handleNext}
-            >
-              {currentStep === steps.length - 1 ? (
+            <Button onClick={handleNext} disabled={isLocked}>
+              {currentStep < steps.length - 1 ? (
                 <>
-                  <Eye className="mr-2 h-4 w-4" />
-                  Continue to Preview
+                  Next <ChevronRight className="h-4 w-4 ml-2" />
                 </>
               ) : (
                 <>
-                  Next
-                  <ChevronRight className="ml-2 h-4 w-4" />
+                  Review & Sign <Eye className="h-4 w-4 ml-2" />
                 </>
               )}
             </Button>

@@ -443,8 +443,8 @@ const I9Section1Form: React.FC<I9Section1FormProps> = ({
 
       <div className="space-y-2">
         <h3 className="text-sm font-semibold text-gray-700">Legal Name Information</h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
           <div>
             <label className="block text-xs font-medium text-gray-700 mb-1">
               Last Name *
@@ -513,9 +513,9 @@ const I9Section1Form: React.FC<I9Section1FormProps> = ({
   const renderAddressInfo = () => (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-700">Residential Address</h3>
-      
-      <div className="grid grid-cols-1 md:grid-cols-6 gap-2">
-        <div className="md:col-span-4">
+
+      <div className="grid grid-cols-1 sm:grid-cols-6 gap-2">
+        <div className="sm:col-span-4">
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Street Address *
           </label>
@@ -532,7 +532,7 @@ const I9Section1Form: React.FC<I9Section1FormProps> = ({
           )}
         </div>
 
-        <div className="md:col-span-2">
+        <div className="sm:col-span-2">
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Apt/Unit
           </label>
@@ -546,7 +546,7 @@ const I9Section1Form: React.FC<I9Section1FormProps> = ({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             City *
@@ -659,8 +659,8 @@ const I9Section1Form: React.FC<I9Section1FormProps> = ({
   const renderContactInfo = () => (
     <div className="space-y-2">
       <h3 className="text-sm font-semibold text-gray-700">Personal Details & Contact</h3>
-      
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2">
         <div>
           <label className="block text-xs font-medium text-gray-700 mb-1">
             Date of Birth *
@@ -838,8 +838,8 @@ const I9Section1Form: React.FC<I9Section1FormProps> = ({
       {(formData.citizenship_status === 'permanent_resident' || formData.citizenship_status === 'authorized_alien') && (
         <div className="border-t pt-6 space-y-6">
           <h4 className="font-semibold text-gray-800">Additional Information Required</h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
             <div>
               <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
                 USCIS Number
@@ -982,7 +982,7 @@ const I9Section1Form: React.FC<I9Section1FormProps> = ({
         {/* Signature Date Section */}
         <div className="bg-white border border-green-200 rounded-lg p-4">
           <h5 className="font-bold text-green-900 text-base mb-3">Employee Signature Date</h5>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs sm:text-sm font-semibold text-gray-700 mb-1 sm:mb-2">
                 Date of Signature (mm/dd/yyyy) *
