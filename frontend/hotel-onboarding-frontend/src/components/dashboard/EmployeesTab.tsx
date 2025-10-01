@@ -632,29 +632,29 @@ export function EmployeesTab({ userRole: propUserRole, propertyId: propPropertyI
 
   return (
     <Card className={`transition-opacity duration-300 ${isAutoRefreshing || isParentRefreshing ? 'opacity-90' : 'opacity-100'}`}>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle className="flex items-center gap-2">
-            <Users className="w-5 h-5" />
-            Employees Directory
+      <CardHeader className="p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-2">
+          <CardTitle className="flex items-center gap-2 text-lg sm:text-xl">
+            <Users className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0" />
+            <span>Employees Directory</span>
           </CardTitle>
           {(isAutoRefreshing || isParentRefreshing) && (
-            <div className="flex items-center gap-2 text-sm text-blue-600">
-              <RefreshCw className="h-3 w-3 animate-spin" />
+            <div className="flex items-center gap-2 text-xs sm:text-sm text-blue-600">
+              <RefreshCw className="h-3 w-3 animate-spin flex-shrink-0" />
               <span>Updating...</span>
             </div>
           )}
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="p-3 sm:p-4 md:p-6">
         {error && (
-          <div className="bg-red-50 border border-red-200 rounded-md p-4 mb-6">
-            <p className="text-red-800">{error}</p>
+          <div className="bg-red-50 border border-red-200 rounded-md p-3 sm:p-4 mb-4 sm:mb-6">
+            <p className="text-xs sm:text-sm text-red-800">{error}</p>
             <Button
               onClick={fetchEmployees}
               variant="outline"
               size="sm"
-              className="mt-2"
+              className="mt-2 min-h-[44px]"
             >
               Retry
             </Button>
@@ -662,27 +662,27 @@ export function EmployeesTab({ userRole: propUserRole, propertyId: propPropertyI
         )}
 
         {/* Compact Search and Filter Bar */}
-        <div className="mb-4">
-          <div className="flex items-center gap-3 flex-wrap">
+        <div className="mb-3 sm:mb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
             {/* Search Bar */}
-            <div className="flex-1 min-w-[280px]">
+            <div className="flex-1 w-full sm:min-w-[280px]">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4 flex-shrink-0" />
                 <Input
                   placeholder="Search employees..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 h-9"
+                  className="pl-10 min-h-[44px] text-sm sm:text-base"
                 />
               </div>
             </div>
 
             {/* Compact Filters */}
-            <div className="flex items-center gap-2 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
               {/* Property Filter (HR only) */}
               {userRole === 'hr' && (
                 <Select value={selectedProperty} onValueChange={setSelectedProperty}>
-                  <SelectTrigger className="w-[120px] h-9 text-sm">
+                  <SelectTrigger className="w-full sm:w-[120px] min-h-[44px] text-xs sm:text-sm">
                     <SelectValue placeholder="Property" />
                   </SelectTrigger>
                   <SelectContent>
@@ -698,7 +698,7 @@ export function EmployeesTab({ userRole: propUserRole, propertyId: propPropertyI
 
               {/* Department Filter */}
               <Select value={selectedDepartment} onValueChange={setSelectedDepartment}>
-                <SelectTrigger className="w-[120px] h-9 text-sm">
+                <SelectTrigger className="flex-1 sm:w-[120px] min-h-[44px] text-xs sm:text-sm">
                   <SelectValue placeholder="Department" />
                 </SelectTrigger>
                 <SelectContent>
@@ -713,7 +713,7 @@ export function EmployeesTab({ userRole: propUserRole, propertyId: propPropertyI
 
               {/* Status Filter */}
               <Select value={selectedStatus} onValueChange={setSelectedStatus}>
-                <SelectTrigger className="w-[100px] h-9 text-sm">
+                <SelectTrigger className="flex-1 sm:w-[100px] min-h-[44px] text-xs sm:text-sm">
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -735,7 +735,7 @@ export function EmployeesTab({ userRole: propUserRole, propertyId: propPropertyI
                   setSortOrder(order as 'asc' | 'desc')
                 }}
               >
-                <SelectTrigger className="w-[110px] h-9 text-sm">
+                <SelectTrigger className="flex-1 sm:w-[110px] min-h-[44px] text-xs sm:text-sm">
                   <SelectValue placeholder="Sort" />
                 </SelectTrigger>
                 <SelectContent>
@@ -750,22 +750,23 @@ export function EmployeesTab({ userRole: propUserRole, propertyId: propPropertyI
             </div>
 
             {/* Action Buttons */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 w-full sm:w-auto">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => fetchEmployees()}
                 disabled={loading || isAutoRefreshing}
-                className="h-9"
+                className="min-h-[44px] w-full sm:w-auto"
               >
-                <RefreshCw className={`h-4 w-4 ${loading || isAutoRefreshing ? 'animate-spin' : ''}`} />
+                <RefreshCw className={`h-4 w-4 flex-shrink-0 ${loading || isAutoRefreshing ? 'animate-spin' : ''}`} />
+                <span className="sm:hidden ml-2">Refresh</span>
               </Button>
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={clearFilters}
                 disabled={!searchQuery && selectedProperty === 'all' && selectedDepartment === 'all' && selectedStatus === 'all'}
-                className="h-9 px-3 text-sm"
+                className="min-h-[44px] px-3 text-xs sm:text-sm flex-1 sm:flex-none"
               >
                 Clear
               </Button>
@@ -773,36 +774,36 @@ export function EmployeesTab({ userRole: propUserRole, propertyId: propPropertyI
                 variant="outline"
                 size="sm"
                 onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                className="h-9 px-3 text-sm"
+                className="min-h-[44px] px-3 text-xs sm:text-sm flex-1 sm:flex-none"
               >
-                <Filter className="h-4 w-4 mr-1" />
-                Filters
+                <Filter className="h-4 w-4 mr-1 flex-shrink-0" />
+                <span>Filters</span>
               </Button>
             </div>
           </div>
 
           {/* Results Summary */}
-          <div className="flex items-center justify-between mt-2 text-sm text-gray-500">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-0 mt-2 text-xs sm:text-sm text-gray-500">
             <span>
               {filteredEmployees.length} of {employees.length} employees
             </span>
             {(searchQuery || selectedProperty !== 'all' || selectedDepartment !== 'all' || selectedStatus !== 'all') && (
-              <span className="text-blue-600 text-xs">Filters active</span>
+              <span className="text-blue-600 text-[10px] sm:text-xs">Filters active</span>
             )}
           </div>
         </div>
 
         {/* Advanced Filters Section */}
         {showAdvancedFilters && (
-          <div className="mb-6 p-4 border border-gray-200 rounded-lg bg-gray-50">
-            <div className="mb-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-2">Advanced Filters</h3>
-              <p className="text-sm text-gray-600">
+          <div className="mb-4 sm:mb-6 p-3 sm:p-4 border border-gray-200 rounded-lg bg-gray-50">
+            <div className="mb-3 sm:mb-4">
+              <h3 className="text-base sm:text-lg font-medium text-gray-900 mb-1 sm:mb-2">Advanced Filters</h3>
+              <p className="text-xs sm:text-sm text-gray-600">
                 Use these advanced filters when basic filtering doesn't meet your needs.
               </p>
             </div>
             {/* The DataTable's advanced filtering will be shown here */}
-            <div className="text-sm text-gray-500">
+            <div className="text-xs sm:text-sm text-gray-500">
               Advanced filtering options are available in the table below. Use the search and filter controls in the table header.
             </div>
           </div>
