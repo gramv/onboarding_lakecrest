@@ -669,14 +669,14 @@ export default function W4FormStep({
 
     if (!hasStoredDocument && metadataError) {
       return (
-        <Alert className="bg-amber-50 border-amber-200">
-          <AlertCircle className="h-4 w-4 text-amber-600" />
+        <Alert className="bg-amber-50 border-amber-200 p-3 sm:p-4">
+          <AlertCircle className="h-4 w-4 sm:h-5 sm:w-5 text-amber-600 flex-shrink-0" />
           <AlertDescription className="text-amber-800">
             <div className="space-y-2">
-              <p>{language === 'es' ? 'No pudimos encontrar su W-4 firmado en el almacenamiento. Por favor repita este paso.' : 'We could not find your signed W-4 in storage. Please redo this step.'}</p>
+              <p className="text-sm sm:text-base">{language === 'es' ? 'No pudimos encontrar su W-4 firmado en el almacenamiento. Por favor repita este paso.' : 'We could not find your signed W-4 in storage. Please redo this step.'}</p>
               <button
                 onClick={handleResetW4}
-                className="text-sm text-amber-700 underline hover:text-amber-800 font-medium"
+                className="text-xs sm:text-sm text-amber-700 underline hover:text-amber-800 font-medium min-h-[44px]"
               >
                 {language === 'es' ? 'Reiniciar el W-4' : 'Restart W-4'}
               </button>
@@ -706,9 +706,9 @@ export default function W4FormStep({
     if (!metadataLoading) return null
 
     return (
-      <Alert className="bg-blue-50 border-blue-200">
-        <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
-        <AlertDescription className="text-blue-800 text-sm">
+      <Alert className="bg-blue-50 border-blue-200 p-3 sm:p-4">
+        <Loader2 className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 animate-spin flex-shrink-0" />
+        <AlertDescription className="text-blue-800 text-xs sm:text-sm">
           {language === 'es' ? 'Verificando los documentos almacenados del W-4...' : 'Checking stored W-4 documents...'}
         </AlertDescription>
       </Alert>
@@ -720,14 +720,14 @@ export default function W4FormStep({
   return (
     <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus} canProceed={isSigned}>
       <StepContentWrapper>
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
         {/* Step Header */}
-        <div className="text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <CreditCard className="h-6 w-6 text-blue-600" />
-            <h1 className="text-heading-secondary">{t.title}</h1>
+        <div className="text-center px-4">
+          <div className="flex items-center justify-center space-x-2 mb-3 sm:mb-4">
+            <CreditCard className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t.title}</h1>
           </div>
-          <p className="text-gray-600 max-w-3xl mx-auto">{t.description}</p>
+          <p className="text-sm sm:text-base text-gray-600 max-w-3xl mx-auto leading-relaxed">{t.description}</p>
         </div>
 
         {/* Compliance validation alerts commented out - hook doesn't exist yet */}
@@ -738,18 +738,18 @@ export default function W4FormStep({
         {/* complianceValidation.w4Validation errors ... */}
 
         {/* Federal Compliance Notice */}
-        <Alert className="bg-blue-50 border-blue-200">
-          <CreditCard className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800">
+        <Alert className="bg-blue-50 border-blue-200 p-3 sm:p-4">
+          <CreditCard className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
+          <AlertDescription className="text-xs sm:text-sm text-blue-800">
             <strong>{language === 'es' ? 'Requisito Federal:' : 'Federal Requirement:'}</strong> {t.federalNotice}
           </AlertDescription>
         </Alert>
 
         {/* Progress Indicator */}
         {isSigned && (
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
+          <Alert className="bg-green-50 border-green-200 p-3 sm:p-4">
+            <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
+            <AlertDescription className="text-sm sm:text-base text-green-800">
               {t.completionMessage}
             </AlertDescription>
           </Alert>
@@ -759,9 +759,9 @@ export default function W4FormStep({
 
         {/* Auto-fill Notification */}
         {autoFillNotification && (
-          <Alert className="bg-blue-50 border-blue-200">
-            <CheckCircle className="h-4 w-4 text-blue-600" />
-            <AlertDescription className="text-blue-800">
+          <Alert className="bg-blue-50 border-blue-200 p-3 sm:p-4">
+            <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
+            <AlertDescription className="text-sm sm:text-base text-blue-800">
               {autoFillNotification}
             </AlertDescription>
           </Alert>
@@ -769,14 +769,14 @@ export default function W4FormStep({
 
         {/* Important Tax Information */}
         <Card className="border-orange-200 bg-orange-50">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-lg flex items-center space-x-2 text-orange-800">
-              <AlertTriangle className="h-5 w-5" />
+          <CardHeader className="pb-3 p-4 sm:p-6">
+            <CardTitle className="text-base sm:text-lg flex items-center space-x-2 text-orange-800">
+              <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
               <span>{t.importantInfoTitle}</span>
             </CardTitle>
           </CardHeader>
-          <CardContent className="text-orange-800">
-            <ul className="space-y-2 text-sm">
+          <CardContent className="text-orange-800 p-4 sm:p-6">
+            <ul className="space-y-2 text-xs sm:text-sm">
               {t.importantInfo.map((info, index) => (
                 <li key={index}>• {info}</li>
               ))}
@@ -786,10 +786,10 @@ export default function W4FormStep({
 
         {/* Show Form, Review, or Signed PDF */}
         {isSigned && hasPreviewSource ? (
-          <div className="space-y-6">
-            <Alert className="bg-green-50 border-green-200">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
+          <div className="space-y-4 sm:space-y-6">
+            <Alert className="bg-green-50 border-green-200 p-3 sm:p-4">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
+              <AlertDescription className="text-sm sm:text-base text-green-800">
                 {t.completionMessage}
               </AlertDescription>
             </Alert>
@@ -797,13 +797,13 @@ export default function W4FormStep({
             {renderMissingDocumentNotice()}
 
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <FileText className="h-5 w-5 text-green-600" />
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
                   <span>{language === 'es' ? 'Vista previa del W-4 firmado' : 'Signed W-4 Preview'}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 sm:p-6">
                 <PDFViewer
                   pdfUrl={remotePdfUrl || documentMetadata?.signed_url || undefined}
                   pdfData={!remotePdfUrl && !documentMetadata?.signed_url ? pdfUrl ?? undefined : undefined}
@@ -821,13 +821,13 @@ export default function W4FormStep({
             required={true}
           >
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <FileText className="h-5 w-5 text-blue-600" />
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+                  <FileText className="h-4 w-4 sm:h-5 sm:w-5 text-blue-600 flex-shrink-0" />
                   <span>{t.formTitle}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
+              <CardContent className="p-4 sm:p-6">
                 <W4FormClean
                   initialData={formData}
                   language={language}
