@@ -978,7 +978,7 @@ export default function CompanyPoliciesStep({
               style={{ width: `${(currentSection / sectionNavigatorConfig.length) * 100}%` }}
             />
           </div>
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+          <div className="flex gap-2 overflow-x-auto pb-2 -mx-2 px-2 scrollbar-thin scrollbar-thumb-blue-300 scrollbar-track-blue-50">
             {sectionNavigatorConfig.map((section, index) => {
               const isCurrent = index + 1 === currentSection
               const isComplete = section.status === 'complete'
@@ -994,7 +994,7 @@ export default function CompanyPoliciesStep({
                     }
                   }}
                   className={cn(
-                    'flex flex-col items-center rounded-xl border px-3 py-2 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500',
+                    'flex flex-col items-center rounded-xl border px-2 py-2 text-center transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex-shrink-0 min-w-[80px] sm:min-w-[100px] min-h-[72px] sm:min-h-[80px]',
                     isCurrent ? 'border-blue-500 bg-white shadow-md' : 'border-transparent bg-blue-100/60 hover:bg-white',
                     (index + 1 > currentSection && !isSectionComplete(index)) && 'cursor-not-allowed opacity-60'
                   )}
@@ -1002,12 +1002,12 @@ export default function CompanyPoliciesStep({
                   aria-current={isCurrent ? 'step' : undefined}
                 >
                   <div className={cn(
-                    'flex h-8 w-8 items-center justify-center rounded-full text-xs font-semibold',
+                    'flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-full text-xs font-semibold flex-shrink-0',
                     isComplete ? 'bg-green-100 text-green-700 border border-green-300' : isCurrent ? 'bg-blue-600 text-white' : 'bg-white text-blue-500'
                   )}>
-                    {isComplete ? <CheckCircle className="h-4 w-4" /> : index + 1}
+                    {isComplete ? <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4" /> : index + 1}
                   </div>
-                  <span className="mt-1 text-[11px] font-medium text-blue-800 line-clamp-2">
+                  <span className="mt-1 text-[10px] sm:text-[11px] font-medium text-blue-800 line-clamp-2 leading-tight">
                     {section.title.replace(/Section \d+:\s?/, '')}
                   </span>
                 </button>
