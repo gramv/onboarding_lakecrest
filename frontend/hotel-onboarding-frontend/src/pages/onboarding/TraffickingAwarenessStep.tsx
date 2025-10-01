@@ -161,7 +161,7 @@ export default function TraffickingAwarenessStep({
   // State 1: Already signed - show PDF viewer
   if (isSigned && pdfUrl) {
     return (
-      <StepContainer saveStatus={saveStatus}>
+      <StepContainer saveStatus={saveStatus} canProceed={true}>
         <StepContentWrapper>
           <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
             {/* Header */}
@@ -186,7 +186,7 @@ export default function TraffickingAwarenessStep({
   // State 2: Training complete, show review & sign
   if (showReview && trainingComplete && certificateData) {
     return (
-      <StepContainer saveStatus={saveStatus}>
+      <StepContainer saveStatus={saveStatus} canProceed={false}>
         <StepContentWrapper>
           <div className="space-y-6 sm:space-y-8 px-2 sm:px-0">
             {/* Professional Header */}
@@ -255,7 +255,7 @@ export default function TraffickingAwarenessStep({
 
   // State 3: Default - show training module
   return (
-    <StepContainer saveStatus={saveStatus}>
+    <StepContainer saveStatus={saveStatus} canProceed={false}>
       <StepContentWrapper>
         <div className="space-y-4 sm:space-y-6 px-2 sm:px-0">
         {/* Step Header */}
