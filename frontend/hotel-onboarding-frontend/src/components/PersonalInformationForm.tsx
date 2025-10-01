@@ -297,13 +297,13 @@ export default function PersonalInformationForm({
 
       {/* Consolidated Personal Information - Single Card */}
       <Card className="flex-1 flex flex-col w-full max-w-none">
-        <CardHeader className="flex-shrink-0">
-          <CardTitle className="flex items-center space-x-2">
-            <User className="h-4 w-4 sm:h-5 sm:w-5" />
+        <CardHeader className="flex-shrink-0 p-4 sm:p-6">
+          <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+            <User className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
             <span>{t('basic_info')}</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="flex-1 spacing-responsive-md overflow-auto min-h-0">
+        <CardContent className="flex-1 space-y-4 sm:space-y-6 overflow-auto min-h-0 p-4 sm:p-6">
           {/* Name Fields - Auto-adaptive grid */}
           <div className="grid-responsive-forms">
             <div className="input-group">
@@ -415,34 +415,36 @@ export default function PersonalInformationForm({
           </div>
 
           {/* Address Section - Responsive layout */}
-          <div className="border-t pt-3 sm:pt-4 lg:pt-6 mt-3 sm:mt-4 lg:mt-6">
-            <h4 className="text-xs sm:text-sm lg:text-base font-semibold text-gray-700 mb-3 sm:mb-4 flex items-center">
-              <MapPin className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2" />
+          <div className="border-t pt-4 sm:pt-6 mt-4 sm:mt-6">
+            <h4 className="text-sm sm:text-base font-semibold text-gray-700 mb-3 sm:mb-4 flex items-center">
+              <MapPin className="h-4 w-4 sm:h-5 sm:w-5 mr-2 flex-shrink-0" />
               {t('address_info')}
             </h4>
             <div className="space-y-3 sm:space-y-4">
               {/* Street Address and Apt Number */}
               <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
                 <div className="sm:col-span-2 lg:col-span-3">
-                  <Label htmlFor="address" className="text-xs sm:text-sm font-medium block mb-1">{t('address')} <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="address" className="text-sm font-medium block mb-1.5">{t('address')} <span className="text-red-500">*</span></Label>
                   <Input
                     id="address"
                     value={formData.address}
                     onChange={(e) => handleInputChange('address', e.target.value)}
                     onBlur={() => handleFieldBlur('address')}
-                    className={`h-9 sm:h-10 lg:h-11 text-sm sm:text-base w-full ${shouldShowError('address') && errors.address ? 'border-red-500' : ''}`}
+                    className={`min-h-[48px] text-sm sm:text-base w-full ${shouldShowError('address') && errors.address ? 'border-red-500' : ''}`}
                     placeholder=""
+                    inputMode="text"
                   />
                   {shouldShowError('address') && errors.address && <p className="text-red-500 text-xs sm:text-sm mt-1">{errors.address}</p>}
                 </div>
                 <div className="sm:col-span-1 lg:col-span-1">
-                  <Label htmlFor="aptNumber" className="text-xs sm:text-sm font-medium block mb-1">{t('apt_number')}</Label>
+                  <Label htmlFor="aptNumber" className="text-sm font-medium block mb-1.5">{t('apt_number')}</Label>
                   <Input
                     id="aptNumber"
                     value={formData.aptNumber}
                     onChange={(e) => handleInputChange('aptNumber', e.target.value)}
                     placeholder=""
-                    className="h-9 sm:h-10 lg:h-11 text-sm sm:text-base w-full"
+                    className="min-h-[48px] text-sm sm:text-base w-full"
+                    inputMode="text"
                   />
                 </div>
               </div>
@@ -450,21 +452,22 @@ export default function PersonalInformationForm({
               {/* City, State, ZIP */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
                 <div className="sm:col-span-1">
-                  <Label htmlFor="city" className="text-xs sm:text-sm font-medium block mb-1">{t('city')} <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="city" className="text-sm font-medium block mb-1.5">{t('city')} <span className="text-red-500">*</span></Label>
                   <Input
                     id="city"
                     value={formData.city}
                     onChange={(e) => handleInputChange('city', e.target.value)}
                     onBlur={() => handleFieldBlur('city')}
-                    className={`h-9 sm:h-10 lg:h-11 text-sm sm:text-base w-full ${shouldShowError('city') && errors.city ? 'border-red-500' : ''}`}
+                    className={`min-h-[48px] text-sm sm:text-base w-full ${shouldShowError('city') && errors.city ? 'border-red-500' : ''}`}
                     placeholder=""
+                    inputMode="text"
                   />
                   {shouldShowError('city') && errors.city && <p className="text-red-500 text-xs sm:text-sm mt-1">{errors.city}</p>}
                 </div>
                 <div className="sm:col-span-1 lg:col-span-1">
-                  <Label htmlFor="state" className="text-xs sm:text-sm font-medium block mb-1">{t('state')} <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="state" className="text-sm font-medium block mb-1.5">{t('state')} <span className="text-red-500">*</span></Label>
                   <Select value={formData.state} onValueChange={(value) => handleInputChange('state', value)}>
-                    <SelectTrigger className={`h-9 sm:h-10 lg:h-11 text-sm sm:text-base w-full ${shouldShowError('state') && errors.state ? 'border-red-500' : ''}`}>
+                    <SelectTrigger className={`min-h-[48px] text-sm sm:text-base w-full ${shouldShowError('state') && errors.state ? 'border-red-500' : ''}`}>
                       <SelectValue placeholder="Select state" />
                     </SelectTrigger>
                     <SelectContent>
@@ -476,13 +479,15 @@ export default function PersonalInformationForm({
                   {shouldShowError('state') && errors.state && <p className="text-red-500 text-xs sm:text-sm mt-1">{errors.state}</p>}
                 </div>
                 <div className="sm:col-span-2 lg:col-span-1">
-                  <Label htmlFor="zipCode" className="text-xs sm:text-sm font-medium block mb-1">{t('zip_code')} <span className="text-red-500">*</span></Label>
+                  <Label htmlFor="zipCode" className="text-sm font-medium block mb-1.5">{t('zip_code')} <span className="text-red-500">*</span></Label>
                   <Input
                     id="zipCode"
+                    type="tel"
+                    inputMode="numeric"
                     value={formData.zipCode}
                     onChange={(e) => handleInputChange('zipCode', e.target.value)}
                     onBlur={() => handleFieldBlur('zipCode')}
-                    className={`h-9 sm:h-10 lg:h-11 text-sm sm:text-base w-full ${shouldShowError('zipCode') && errors.zipCode ? 'border-red-500' : ''}`}
+                    className={`min-h-[48px] text-sm sm:text-base w-full ${shouldShowError('zipCode') && errors.zipCode ? 'border-red-500' : ''}`}
                     placeholder=""
                   />
                   {shouldShowError('zipCode') && errors.zipCode && <p className="text-red-500 text-xs sm:text-sm mt-1">{errors.zipCode}</p>}
@@ -492,51 +497,51 @@ export default function PersonalInformationForm({
           </div>
 
           {/* Demographics - Horizontal layout */}
-          <div className="border-t pt-2 mt-2">
-            <h4 className="text-xs font-semibold text-gray-700 mb-2">{t('demographics')} <span className="text-xs text-gray-500">(Optional)</span></h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="border-t pt-4 mt-4 sm:mt-6">
+            <h4 className="text-sm font-semibold text-gray-700 mb-3">{t('demographics')} <span className="text-xs text-gray-500">(Optional)</span></h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
               <div>
-                <Label className="text-xs font-medium">{t('gender')}</Label>
-                <RadioGroup value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)} className="flex flex-col sm:flex-row gap-4 mt-2">
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="male" id="male" />
+                <Label className="text-sm font-medium block mb-2">{t('gender')}</Label>
+                <RadioGroup value={formData.gender} onValueChange={(value) => handleInputChange('gender', value)} className="flex flex-col gap-3">
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="male" id="male" className="h-5 w-5" />
                     <Label htmlFor="male" className="text-sm font-normal cursor-pointer">{t('male')}</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="female" id="female" />
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="female" id="female" className="h-5 w-5" />
                     <Label htmlFor="female" className="text-sm font-normal cursor-pointer">{t('female')}</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="other" id="other" />
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="other" id="other" className="h-5 w-5" />
                     <Label htmlFor="other" className="text-sm font-normal cursor-pointer">{t('other')}</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="prefer_not_say" id="prefer_not_say" />
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="prefer_not_say" id="prefer_not_say" className="h-5 w-5" />
                     <Label htmlFor="prefer_not_say" className="text-sm font-normal cursor-pointer">{t('prefer_not_say')}</Label>
                   </div>
                 </RadioGroup>
               </div>
               <div>
-                <Label className="text-xs font-medium">{t('marital_status')}</Label>
-                <RadioGroup value={formData.maritalStatus} onValueChange={(value) => handleInputChange('maritalStatus', value)} className="flex flex-col sm:flex-row sm:flex-wrap gap-4 mt-2">
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="single" id="single" />
+                <Label className="text-sm font-medium block mb-2">{t('marital_status')}</Label>
+                <RadioGroup value={formData.maritalStatus} onValueChange={(value) => handleInputChange('maritalStatus', value)} className="flex flex-col gap-3">
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="single" id="single" className="h-5 w-5" />
                     <Label htmlFor="single" className="text-sm font-normal cursor-pointer">{t('single')}</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="married" id="married" />
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="married" id="married" className="h-5 w-5" />
                     <Label htmlFor="married" className="text-sm font-normal cursor-pointer">{t('married')}</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="divorced" id="divorced" />
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="divorced" id="divorced" className="h-5 w-5" />
                     <Label htmlFor="divorced" className="text-sm font-normal cursor-pointer">{t('divorced')}</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="widowed" id="widowed" />
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="widowed" id="widowed" className="h-5 w-5" />
                     <Label htmlFor="widowed" className="text-sm font-normal cursor-pointer">{t('widowed')}</Label>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <RadioGroupItem value="separated" id="separated" />
+                  <div className="flex items-center space-x-2 min-h-[44px]">
+                    <RadioGroupItem value="separated" id="separated" className="h-5 w-5" />
                     <Label htmlFor="separated" className="text-sm font-normal cursor-pointer">{t('separated')}</Label>
                   </div>
                 </RadioGroup>
@@ -548,9 +553,9 @@ export default function PersonalInformationForm({
 
       {/* Warnings Display */}
       {Object.keys(warnings).length > 0 && (
-        <Alert className="bg-yellow-50 border-yellow-200 py-1">
-          <AlertTriangle className="h-3 w-3 text-yellow-600" />
-          <AlertDescription className="text-xs">
+        <Alert className="bg-yellow-50 border-yellow-200 p-3 sm:p-4">
+          <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-600" />
+          <AlertDescription className="text-xs sm:text-sm">
             {Object.values(warnings).map((warning, index) => (
               <p key={index} className="text-yellow-800">{warning}</p>
             ))}
@@ -559,8 +564,8 @@ export default function PersonalInformationForm({
       )}
 
       {/* Privacy Notice - Compact */}
-      <div className="text-xs text-gray-500 flex items-center space-x-1">
-        <Mail className="h-3 w-3" />
+      <div className="text-xs sm:text-sm text-gray-500 flex items-start sm:items-center space-x-2 leading-snug px-2 sm:px-0">
+        <Mail className="h-3 w-3 sm:h-4 sm:w-4 flex-shrink-0 mt-0.5 sm:mt-0" />
         <span>{t('privacy_notice')}</span>
       </div>
 

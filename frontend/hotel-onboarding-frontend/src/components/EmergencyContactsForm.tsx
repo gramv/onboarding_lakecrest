@@ -227,17 +227,17 @@ export default function EmergencyContactsForm({
 
       {/* Emergency Contacts - Side by Side */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="flex items-center space-x-2 text-lg">
-            <Phone className="h-4 w-4" />
+        <CardHeader className="pb-3 p-4 sm:p-6">
+          <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+            <Phone className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
             <span>Emergency Contacts</span>
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:divide-x lg:divide-gray-200">
+        <CardContent className="space-y-4 sm:space-y-6 p-4 sm:p-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 lg:divide-x lg:divide-gray-200">
             {/* Primary Contact */}
-            <div className="space-y-3 lg:pr-6">
-              <h4 className="font-medium text-sm text-gray-700 border-b pb-1">{t('primary_contact')}</h4>
+            <div className="space-y-3 sm:space-y-4 lg:pr-6">
+              <h4 className="font-medium text-sm sm:text-base text-gray-700 border-b pb-1.5">{t('primary_contact')}</h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="primary_name" className="text-sm">{t('contact_name')} *</Label>
@@ -362,8 +362,8 @@ export default function EmergencyContactsForm({
             </div>
 
             {/* Secondary Contact */}
-            <div className="space-y-3 lg:pl-6">
-              <h4 className="font-medium text-sm text-gray-700 border-b pb-1">{t('secondary_contact')} <span className="text-xs text-gray-500">(Optional)</span></h4>
+            <div className="space-y-3 sm:space-y-4 lg:pl-6">
+              <h4 className="font-medium text-sm sm:text-base text-gray-700 border-b pb-1.5">{t('secondary_contact')} <span className="text-xs text-gray-500">(Optional)</span></h4>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
                   <Label htmlFor="secondary_name" className="text-sm">{t('contact_name')}</Label>
@@ -481,44 +481,44 @@ export default function EmergencyContactsForm({
 
       {/* Medical Information - Compact */}
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg">{t('medical_information')}</CardTitle>
+        <CardHeader className="pb-3 p-4 sm:p-6">
+          <CardTitle className="text-base sm:text-lg">{t('medical_information')}</CardTitle>
         </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <CardContent className="p-4 sm:p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 sm:gap-4">
             <div>
-              <Label htmlFor="allergies" className="text-sm">{t('allergies')}</Label>
+              <Label htmlFor="allergies" className="text-sm font-medium block mb-1.5">{t('allergies')}</Label>
               <textarea
                 id="allergies"
                 value={formData.allergies}
                 onChange={(e) => setFormData(prev => ({ ...prev, allergies: e.target.value }))}
                 onBlur={() => handleFieldBlur('allergies')}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                rows={2}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base min-h-[48px]"
+                rows={3}
                 placeholder=""
               />
             </div>
             <div>
-              <Label htmlFor="medications" className="text-sm">{t('medications')}</Label>
+              <Label htmlFor="medications" className="text-sm font-medium block mb-1.5">{t('medications')}</Label>
               <textarea
                 id="medications"
                 value={formData.medications}
                 onChange={(e) => setFormData(prev => ({ ...prev, medications: e.target.value }))}
                 onBlur={() => handleFieldBlur('medications')}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                rows={2}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base min-h-[48px]"
+                rows={3}
                 placeholder=""
               />
             </div>
             <div>
-              <Label htmlFor="medicalConditions" className="text-sm">{t('medical_conditions')}</Label>
+              <Label htmlFor="medicalConditions" className="text-sm font-medium block mb-1.5">{t('medical_conditions')}</Label>
               <textarea
                 id="medicalConditions"
                 value={formData.medicalConditions}
                 onChange={(e) => setFormData(prev => ({ ...prev, medicalConditions: e.target.value }))}
                 onBlur={() => handleFieldBlur('medicalConditions')}
-                className="w-full p-2 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500 text-sm"
-                rows={2}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm sm:text-base min-h-[48px]"
+                rows={3}
                 placeholder=""
               />
             </div>
@@ -526,9 +526,9 @@ export default function EmergencyContactsForm({
         </CardContent>
       </Card>
 
-      <Alert className="py-2">
-        <Info className="h-3 w-3" />
-        <AlertDescription className="text-xs">
+      <Alert className="p-3 sm:p-4">
+        <Info className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
+        <AlertDescription className="text-xs sm:text-sm leading-snug">
           Emergency contact information is confidential and used only in emergencies. Provide contacts readily available and authorized to make decisions.
         </AlertDescription>
       </Alert>

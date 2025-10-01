@@ -282,16 +282,16 @@ export default function PersonalInfoStep({
         />
         
         {/* Step Header */}
-        <div className="text-center">
-          <div className="flex items-center justify-center space-x-2 mb-4">
-            <User className="h-6 w-6 text-blue-600" />
-            <h1 className="text-2xl font-bold text-gray-900">{t.title}</h1>
+        <div className="text-center px-4">
+          <div className="flex items-center justify-center space-x-2 mb-3 sm:mb-4">
+            <User className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600 flex-shrink-0" />
+            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-gray-900">{t.title}</h1>
           </div>
-          <p className="text-gray-600 max-w-2xl mx-auto">{t.description}</p>
+          <p className="text-sm sm:text-base text-gray-600 max-w-2xl mx-auto leading-relaxed">{t.description}</p>
         </div>
 
         {/* Section Summary */}
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 px-2 sm:px-0">
           {[
             {
               id: 'personal',
@@ -312,22 +312,22 @@ export default function PersonalInfoStep({
           ].map(section => (
             <div
               key={section.id}
-              className={`flex items-start gap-3 rounded-lg border p-3 ${
+              className={`flex items-start gap-2 sm:gap-3 rounded-lg border p-3 sm:p-4 ${
                 section.complete ? 'border-green-200 bg-green-50' : 'border-blue-100 bg-blue-50'
               }`}
             >
-              <div className="mt-1">
+              <div className="mt-0.5 sm:mt-1 flex-shrink-0">
                 {section.complete ? (
-                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600" />
                 ) : (
-                  <Badge variant="outline" className="text-[11px]">
+                  <Badge variant="outline" className="text-[10px] sm:text-[11px] px-1.5 py-0.5">
                     {t.required}
                   </Badge>
                 )}
               </div>
-              <div>
-                <p className="text-sm font-medium text-gray-900">{section.label}</p>
-                <p className="text-xs text-gray-600">{section.description}</p>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs sm:text-sm font-medium text-gray-900 truncate">{section.label}</p>
+                <p className="text-[11px] sm:text-xs text-gray-600 leading-snug mt-0.5">{section.description}</p>
               </div>
             </div>
           ))}
@@ -336,17 +336,17 @@ export default function PersonalInfoStep({
 
         {/* Tabbed Interface */}
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 mb-6">
+          <TabsList className="grid w-full grid-cols-2 mb-4 sm:mb-6 sticky top-0 z-10 bg-white shadow-sm">
             {tabs.map(tab => (
-              <TabsTrigger 
+              <TabsTrigger
                 key={tab.id}
                 value={tab.id}
                 disabled={tab.disabled}
-                className="flex items-center space-x-2"
+                className="flex items-center justify-center space-x-1 sm:space-x-2 min-h-[44px] text-xs sm:text-sm"
               >
-                {tab.icon && tab.icon}
-                <span className="hidden sm:inline">{tab.label}</span>
-                {tab.complete && <CheckCircle className="h-3 w-3 text-green-600 ml-1" />}
+                {tab.icon && React.cloneElement(tab.icon, { className: 'h-4 w-4 flex-shrink-0' })}
+                <span className="truncate">{tab.label}</span>
+                {tab.complete && <CheckCircle className="h-3 w-3 sm:h-4 sm:w-4 text-green-600 ml-0.5 sm:ml-1 flex-shrink-0" />}
               </TabsTrigger>
             ))}
           </TabsList>
@@ -365,14 +365,14 @@ export default function PersonalInfoStep({
 
                 {/* Go to Emergency Contacts Button */}
                 {personalInfoValid && (
-                  <div className="flex justify-center">
+                  <div className="flex justify-center px-4 sm:px-0">
                     <Button
                       onClick={() => handleTabChange('emergency')}
-                      className="w-full sm:w-auto min-h-[44px] px-6"
+                      className="w-full sm:w-auto min-h-[48px] px-6 text-sm sm:text-base"
                       variant="default"
                     >
                       {t.continueToEmergency}
-                      <ArrowRight className="ml-2 h-4 w-4" />
+                      <ArrowRight className="ml-2 h-4 w-4 flex-shrink-0" />
                     </Button>
                   </div>
                 )}
@@ -381,14 +381,14 @@ export default function PersonalInfoStep({
             )}
           </TabsContent>
 
-          <TabsContent value="emergency" className="space-y-6">
+          <TabsContent value="emergency" className="space-y-4 sm:space-y-6">
             {dataLoaded && (
               <>
                 {/* Back to Personal Details Button */}
-                <div className="flex justify-start">
+                <div className="flex justify-start px-4 sm:px-0">
                   <Button
                     onClick={() => handleTabChange('personal')}
-                    className="min-h-[44px]"
+                    className="min-h-[48px] text-sm sm:text-base"
                     variant="outline"
                   >
                     {t.backToPersonal}
