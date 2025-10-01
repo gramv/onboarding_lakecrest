@@ -12,7 +12,6 @@ import { useStepValidation } from '@/hooks/useStepValidation'
 import { healthInsuranceValidator } from '@/utils/stepValidators'
 import axios from 'axios'
 import { getApiUrl } from '@/config/api'
-import { NavigationButtons } from '@/components/navigation/NavigationButtons'
 
 export default function HealthInsuranceStep({
   currentStep,
@@ -258,21 +257,6 @@ export default function HealthInsuranceStep({
                 pdfEndpoint={`${getApiUrl()}/onboarding/${employee?.id || 'test-employee'}/health-insurance/generate-pdf`}
               />
             </div>
-
-            {/* Navigation */}
-            <div className="max-w-4xl mx-auto">
-              <NavigationButtons
-                showPrevious={true}
-                showNext={true}
-                onPrevious={goToPreviousStep || (() => {})}
-                onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-                disabled={saveStatus?.saving}
-                saving={saveStatus?.saving}
-                hasErrors={false}
-                language={language}
-                nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
-              />
-            </div>
           </div>
         </StepContentWrapper>
       </StepContainer>
@@ -367,21 +351,6 @@ export default function HealthInsuranceStep({
               <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></span>
               {t.estimatedTime}
             </p>
-          </div>
-
-          {/* Navigation */}
-          <div className="max-w-4xl mx-auto">
-            <NavigationButtons
-              showPrevious={true}
-              showNext={true}
-              onPrevious={goToPreviousStep || (() => {})}
-              onNext={advanceToNextStep || (async () => ({ allowed: false, reason: 'Navigation not available' }))}
-              disabled={saveStatus?.saving || !isValid}
-              saving={saveStatus?.saving}
-              hasErrors={false}
-              language={language}
-              nextButtonText={progress.currentStepIndex === progress.totalSteps - 1 ? 'Submit' : 'Next'}
-            />
           </div>
         </div>
       </StepContentWrapper>
