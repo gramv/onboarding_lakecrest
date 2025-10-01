@@ -551,29 +551,29 @@ export default function DirectDepositStep({
     return (
       <StepContainer errors={errors} saveStatus={saveStatus}>
         <StepContentWrapper>
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Completion Status */}
-            <Alert className="bg-green-50 border-green-200">
-              <CheckCircle className="h-4 w-4 text-green-600" />
-              <AlertDescription className="text-green-800">
+            <Alert className="bg-green-50 border-green-200 p-3 sm:p-4">
+              <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
+              <AlertDescription className="text-sm sm:text-base text-green-800">
                 {t.completionMessage}
               </AlertDescription>
             </Alert>
 
             {/* Signed PDF Display */}
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center space-x-2">
-                  <DollarSign className="h-5 w-5 text-green-600" />
+              <CardHeader className="p-4 sm:p-6">
+                <CardTitle className="flex items-center space-x-2 text-base sm:text-lg">
+                  <DollarSign className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
                   <span>Signed Direct Deposit Authorization</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <p className="text-sm text-gray-600">
+              <CardContent className="p-4 sm:p-6">
+                <div className="space-y-3 sm:space-y-4">
+                  <p className="text-xs sm:text-sm text-gray-600">
                     Your direct deposit authorization has been completed and signed.
                   </p>
-                  <div className="border rounded-lg p-4">
+                  <div className="border rounded-lg p-2 sm:p-4">
                     <PDFViewer pdfData={pdfUrl} height="600px" />
                   </div>
                 </div>
@@ -604,19 +604,19 @@ export default function DirectDepositStep({
     return (
       <StepContainer errors={errors} saveStatus={saveStatus}>
         <StepContentWrapper>
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
           {/* Validation Summary */}
           {validationMessages.length > 0 && (
             <ValidationSummary
               messages={validationMessages}
               title="Please correct the following issues"
-              className="mb-6"
+              className="mb-4 sm:mb-6"
             />
           )}
 
           {isSingleStepMode && (
-            <Alert className="mb-6 bg-blue-50 border-blue-200">
-              <AlertDescription className="text-blue-800">
+            <Alert className="mb-4 sm:mb-6 bg-blue-50 border-blue-200 p-3 sm:p-4">
+              <AlertDescription className="text-xs sm:text-sm text-blue-800">
                 You are completing a standalone direct deposit form. Once you sign and submit, HR will be notified automatically{singleStepMeta?.recipientEmail ? ` at ${singleStepMeta.recipientEmail}` : ''}.
               </AlertDescription>
             </Alert>
@@ -651,19 +651,19 @@ export default function DirectDepositStep({
   return (
     <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus}>
       <StepContentWrapper>
-        <div className="space-y-6">
+        <div className="space-y-4 sm:space-y-6">
         {/* Validation Summary */}
         {validationMessages.length > 0 && (
           <ValidationSummary
             messages={validationMessages}
             title="Please correct the following issues"
-            className="mb-6"
+            className="mb-4 sm:mb-6"
           />
         )}
 
         {isSingleStepMode && (
-          <Alert className="bg-blue-50 border-blue-200">
-            <AlertDescription className="text-blue-800">
+          <Alert className="bg-blue-50 border-blue-200 p-3 sm:p-4">
+            <AlertDescription className="text-xs sm:text-sm text-blue-800">
               Complete this form to finalize your direct deposit details. A confirmation is sent to HR automatically once you finish.
             </AlertDescription>
           </Alert>
@@ -671,9 +671,9 @@ export default function DirectDepositStep({
 
         {/* Progress Indicator */}
         {isStepComplete && (
-          <Alert className="bg-green-50 border-green-200">
-            <CheckCircle className="h-4 w-4 text-green-600" />
-            <AlertDescription className="text-green-800">
+          <Alert className="bg-green-50 border-green-200 p-3 sm:p-4">
+            <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
+            <AlertDescription className="text-sm sm:text-base text-green-800">
               {t.completionMessage}
             </AlertDescription>
           </Alert>
@@ -687,17 +687,17 @@ export default function DirectDepositStep({
           completed={isStepComplete}
           required={true}
         >
-          <div className="space-y-6">
+          <div className="space-y-4 sm:space-y-6">
             {/* Important Information */}
             <Card className="border-amber-200 bg-amber-50">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-lg flex items-center space-x-2 text-amber-800">
-                  <AlertTriangle className="h-5 w-5" />
+              <CardHeader className="pb-3 p-4 sm:p-6">
+                <CardTitle className="text-base sm:text-lg flex items-center space-x-2 text-amber-800">
+                  <AlertTriangle className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                   <span>{t.importantInfoTitle}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="text-amber-800">
-                <ul className="space-y-2 text-sm">
+              <CardContent className="text-amber-800 p-4 sm:p-6">
+                <ul className="space-y-2 text-xs sm:text-sm">
                   {t.importantInfo.map((info, index) => (
                     <li key={index}>• {info}</li>
                   ))}
@@ -706,8 +706,8 @@ export default function DirectDepositStep({
             </Card>
 
             {/* Direct Deposit Form */}
-            <div className="space-y-4">
-              <h3 className="text-xl font-semibold text-gray-900">{t.formTitle}</h3>
+            <div className="space-y-3 sm:space-y-4">
+              <h3 className="text-lg sm:text-xl font-semibold text-gray-900 px-2 sm:px-0">{t.formTitle}</h3>
               <DirectDepositFormEnhanced
                 initialData={formData}
                 language={language}
