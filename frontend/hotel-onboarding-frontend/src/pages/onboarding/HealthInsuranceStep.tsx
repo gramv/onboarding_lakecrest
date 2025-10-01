@@ -212,26 +212,26 @@ export default function HealthInsuranceStep({
     return (
       <StepContainer errors={errors} saveStatus={saveStatus}>
         <StepContentWrapper>
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8 px-2 sm:px-0">
             {/* Professional Header with Certificate Style */}
-            <div className="text-center space-y-4">
-              <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg mb-4">
-                <Heart className="h-10 w-10 text-white" />
+            <div className="text-center space-y-3 sm:space-y-4">
+              <div className="inline-flex items-center justify-center w-16 h-16 sm:w-20 sm:h-20 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg mb-3 sm:mb-4">
+                <Heart className="h-8 w-8 sm:h-10 sm:w-10 text-white" />
               </div>
               <div>
-                <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2">
+                <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2">
                   {t.reviewTitle}
                 </h1>
-                <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+                <p className="text-base sm:text-lg text-gray-600 max-w-2xl mx-auto px-4">
                   {t.reviewDescription}
                 </p>
               </div>
 
               {/* Professional divider */}
-              <div className="flex items-center justify-center space-x-4 py-4">
-                <div className="h-px w-24 bg-gradient-to-r from-transparent to-blue-300"></div>
-                <Heart className="h-5 w-5 text-blue-500" />
-                <div className="h-px w-24 bg-gradient-to-l from-transparent to-blue-300"></div>
+              <div className="flex items-center justify-center space-x-3 sm:space-x-4 py-3 sm:py-4">
+                <div className="h-px w-16 sm:w-24 bg-gradient-to-r from-transparent to-blue-300"></div>
+                <Heart className="h-4 w-4 sm:h-5 sm:w-5 text-blue-500 flex-shrink-0" />
+                <div className="h-px w-16 sm:w-24 bg-gradient-to-l from-transparent to-blue-300"></div>
               </div>
             </div>
 
@@ -282,38 +282,38 @@ export default function HealthInsuranceStep({
   return (
     <StepContainer errors={errors} fieldErrors={fieldErrors} saveStatus={saveStatus}>
       <StepContentWrapper>
-        <div className="space-y-8">
+        <div className="space-y-6 sm:space-y-8 px-2 sm:px-0">
           {/* Professional Header */}
-          <div className="text-center space-y-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg mb-3">
-              <Heart className="h-8 w-8 text-white" />
+          <div className="text-center space-y-3 sm:space-y-4">
+            <div className="inline-flex items-center justify-center w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-blue-500 to-blue-600 shadow-lg mb-2 sm:mb-3">
+              <Heart className="h-6 w-6 sm:h-8 sm:w-8 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-3">
+              <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-2 sm:mb-3">
                 {t.title}
               </h1>
-              <p className="text-base md:text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed">
+              <p className="text-sm sm:text-base md:text-lg text-gray-600 max-w-3xl mx-auto leading-relaxed px-4">
                 {t.description}
               </p>
             </div>
 
             {/* Professional divider */}
-            <div className="flex items-center justify-center space-x-4 py-3">
-              <div className="h-px w-20 bg-gradient-to-r from-transparent to-blue-300"></div>
-              <Heart className="h-4 w-4 text-blue-500" />
-              <div className="h-px w-20 bg-gradient-to-l from-transparent to-blue-300"></div>
+            <div className="flex items-center justify-center space-x-3 sm:space-x-4 py-2 sm:py-3">
+              <div className="h-px w-12 sm:w-20 bg-gradient-to-r from-transparent to-blue-300"></div>
+              <Heart className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500 flex-shrink-0" />
+              <div className="h-px w-12 sm:w-20 bg-gradient-to-l from-transparent to-blue-300"></div>
             </div>
           </div>
 
           {/* Enrollment Period Notice - Enhanced */}
-          <Alert className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-300 shadow-sm max-w-4xl mx-auto">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-500 flex items-center justify-center">
-                <Heart className="h-5 w-5 text-white" />
+          <Alert className="bg-gradient-to-r from-blue-50 to-blue-100 border-blue-300 shadow-sm max-w-4xl mx-auto p-3 sm:p-4">
+            <div className="flex items-start gap-2 sm:gap-3">
+              <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-blue-500 flex items-center justify-center">
+                <Heart className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
               </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-blue-900 mb-1">{t.enrollmentPeriod}</h3>
-                <AlertDescription className="text-blue-800">
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-blue-900 mb-1 text-sm sm:text-base">{t.enrollmentPeriod}</h3>
+                <AlertDescription className="text-blue-800 text-xs sm:text-sm">
                   {t.enrollmentNotice}
                 </AlertDescription>
               </div>
@@ -322,13 +322,13 @@ export default function HealthInsuranceStep({
 
           {/* Completion Status - Enhanced */}
           {isStepComplete && (
-            <Alert className="bg-gradient-to-r from-green-50 to-green-100 border-green-300 shadow-sm max-w-4xl mx-auto">
-              <div className="flex items-start gap-3">
-                <div className="flex-shrink-0 w-10 h-10 rounded-full bg-green-500 flex items-center justify-center">
-                  <CheckCircle className="h-5 w-5 text-white" />
+            <Alert className="bg-gradient-to-r from-green-50 to-green-100 border-green-300 shadow-sm max-w-4xl mx-auto p-3 sm:p-4">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-green-500 flex items-center justify-center">
+                  <CheckCircle className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                 </div>
-                <div className="flex-1">
-                  <AlertDescription className="text-green-800 font-medium">
+                <div className="flex-1 min-w-0">
+                  <AlertDescription className="text-green-800 font-medium text-sm sm:text-base">
                     {t.completionMessage}
                   </AlertDescription>
                 </div>
@@ -339,15 +339,15 @@ export default function HealthInsuranceStep({
           {/* Health Insurance Form - Enhanced Card */}
           <div className="max-w-5xl mx-auto">
             <Card className="shadow-lg border-t-4 border-t-blue-500">
-              <CardHeader className="bg-gradient-to-r from-blue-50 to-white pb-4">
-                <CardTitle className="flex items-center space-x-3 text-xl">
-                  <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-blue-500 flex items-center justify-center">
-                    <Users className="h-5 w-5 text-white" />
+              <CardHeader className="bg-gradient-to-r from-blue-50 to-white pb-3 sm:pb-4 p-4 sm:p-6">
+                <CardTitle className="flex items-center space-x-2 sm:space-x-3 text-base sm:text-lg md:text-xl">
+                  <div className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-blue-500 flex items-center justify-center">
+                    <Users className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                   </div>
                   <span className="text-gray-900">{t.planSelectionTitle}</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
+              <CardContent className="pt-4 sm:pt-6 p-4 sm:p-6">
                 <HealthInsuranceForm
                   initialData={formData}
                   language={language}
@@ -363,8 +363,8 @@ export default function HealthInsuranceStep({
 
           {/* Time Estimate - Enhanced */}
           <div className="text-center">
-            <p className="inline-flex items-center gap-2 text-sm text-gray-500 bg-gray-50 px-4 py-2 rounded-full border border-gray-200">
-              <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
+            <p className="inline-flex items-center gap-2 text-xs sm:text-sm text-gray-500 bg-gray-50 px-3 sm:px-4 py-2 rounded-full border border-gray-200">
+              <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse flex-shrink-0"></span>
               {t.estimatedTime}
             </p>
           </div>
